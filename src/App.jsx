@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from './firebase';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
@@ -7,30 +7,41 @@ import Dashboard from './components/Dashboard';
 export default function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [manualLogout, setManualLogout] = useState(false);
 
   useEffect(() => {
-    // Firebase の認証状態を監視
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
+      if (currentUser) {
+        const userWithRole = {
+          ...currentUser,
+          role: currentUser.email === 'admin@guesthouse.local' ? 'admin' : 'staff'
+        };
+        setUser(userWithRole);
+      } else {
+        setUser(null);
+      }
       setLoading(false);
     });
 
     return unsubscribe;
   }, []);
 
-  // テスト用：自動ログイン（開発環境のみ）
+  // テスト用：自動ログイン（開発環境のみ、手動ログアウト後は無効）
   useEffect(() => {
-    if (loading) return;
+    if (loading || manualLogout) return;
     if (!user && process.env.NODE_ENV === 'development') {
-      // テストユーザー情報（ダッシュボード表示用）
+      // 管理者ロールでテスト
       setUser({
-        email: 'test@guesthouse.local',
-        uid: 'test-user-001'
+        email: 'admin@guesthouse.local',
+        uid: 'admin-user-001',
+        role: 'admin'
       });
     }
-  }, [loading, user]);
+  }, [loading, user, manualLogout]);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    setManualLogout(true);
+    await signOut(auth);
     setUser(null);
   };
 
@@ -45,11 +56,9 @@ export default function App() {
     );
   }
 
-  // テスト用簡易認証：ユーザーがいない場合はログイン画面を表示
   if (!user) {
-    return <Login onLoginSuccess={() => {}} />;
+    return <Login onLoginSuccess={() => setManualLogout(false)} />;
   }
 
-  // ログイン済み：ダッシュボードを表示
   return <Dashboard user={user} onLogout={handleLogout} />;
 }
