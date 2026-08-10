@@ -8,16 +8,18 @@ export default function EditReservationModal({ reservation, onClose, onReservati
     cleaningDate: reservation.cleaningDate || reservation.checkOut || '',
     persons: reservation.persons || 1,
     notes: reservation.notes || '',
-    status: reservation.status || 'confirmed'
+    status: reservation.status || 'confirmed',
+    hasCheckIn: reservation.hasCheckIn || false,
+    checkInTime: reservation.checkInTime || ''
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
+    const { name, value, type, checked } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: name === 'persons' ? parseInt(value) : value
+      [name]: type === 'checkbox' ? checked : (name === 'persons' ? parseInt(value) : value)
     }));
   };
 
@@ -39,9 +41,9 @@ export default function EditReservationModal({ reservation, onClose, onReservati
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
-        <div className="bg-blue-500 text-white px-6 py-4 flex justify-between items-center">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] flex flex-col">
+        <div className="bg-blue-500 text-white px-6 py-4 flex justify-between items-center flex-shrink-0">
           <h2 className="text-xl font-bold">清掃予定を編集</h2>
           <button
             onClick={onClose}
@@ -51,7 +53,7 @@ export default function EditReservationModal({ reservation, onClose, onReservati
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto">
           {error && (
             <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
               {error}
@@ -98,6 +100,39 @@ export default function EditReservationModal({ reservation, onClose, onReservati
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               required
             />
+          </div>
+
+          <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 space-y-3">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                name="hasCheckIn"
+                checked={formData.hasCheckIn}
+                onChange={handleChange}
+                className="w-5 h-5 text-orange-600 rounded focus:ring-orange-500"
+              />
+              <span className="font-semibold text-orange-800">
+                ⚠️ 同日にゲストのチェックインがある
+              </span>
+            </label>
+            <p className="text-sm text-orange-700">
+              チェックがある場合、ゲストの入室時刻までに清掃を完了させる必要があります
+            </p>
+
+            {formData.hasCheckIn && (
+              <div>
+                <label className="block text-gray-700 font-semibold mb-2 text-sm">
+                  チェックイン予定時刻
+                </label>
+                <input
+                  type="time"
+                  name="checkInTime"
+                  value={formData.checkInTime}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                />
+              </div>
+            )}
           </div>
 
           <div>

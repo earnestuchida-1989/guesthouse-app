@@ -45,10 +45,29 @@ export default function Reservations() {
     setSelectedReservation(null);
   };
 
+  // チェックインありを優先的に上部表示、その後は清掃日順
+  const sortedReservations = [...reservations].sort((a, b) => {
+    if (!!b.hasCheckIn !== !!a.hasCheckIn) {
+      return (b.hasCheckIn ? 1 : 0) - (a.hasCheckIn ? 1 : 0);
+    }
+    const dateA = a.cleaningDate || a.checkOut || '';
+    const dateB = b.cleaningDate || b.checkOut || '';
+    return dateA.localeCompare(dateB);
+  });
+
+  const checkInCount = reservations.filter(r => r.hasCheckIn).length;
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-gray-800">清掃スケジュール管理</h1>
+        <div>
+          <h1 className="text-3xl font-bold text-gray-800">清掃スケジュール管理</h1>
+          {checkInCount > 0 && (
+            <p className="text-sm text-orange-700 font-semibold mt-1">
+              ⚠️ 本日以降、チェックインありの予定が {checkInCount} 件あります（優先対応）
+            </p>
+          )}
+        </div>
         <button
           onClick={() => setShowAddModal(true)}
           className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-6 rounded-lg transition"
@@ -66,6 +85,7 @@ export default function Reservations() {
           <table className="w-full">
             <thead className="bg-gray-100 border-b-2 border-gray-300">
               <tr>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">イン</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">物件名</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">清掃日</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">人数</th>
@@ -75,16 +95,31 @@ export default function Reservations() {
               </tr>
             </thead>
             <tbody>
-              {reservations.map((res) => (
-                <tr key={res.id} className="border-b hover:bg-gray-50">
+              {sortedReservations.map((res) => (
+                <tr
+                  key={res.id}
+                  className={`border-b hover:bg-gray-50 ${res.hasCheckIn ? 'bg-orange-50' : ''}`}
+                >
+                  <td className="px-6 py-4">
+                    {res.hasCheckIn ? (
+                      <span
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold bg-orange-500 text-white"
+                        title="ゲストのチェックインあり"
+                      >
+                        🔴 イン{res.checkInTime ? ` ${res.checkInTime}` : ''}
+                      </span>
+                    ) : (
+                      <span className="text-gray-300 text-xs">-</span>
+                    )}
+                  </td>
                   <td className="px-6 py-4 text-gray-800">{res.propertyName || res.guestName}</td>
                   <td className="px-6 py-4 text-gray-800">{res.cleaningDate || res.checkOut}</td>
                   <td className="px-6 py-4 text-gray-800">{res.persons}</td>
                   <td className="px-6 py-4 text-gray-600 text-sm">{res.notes || '-'}</td>
                   <td className="px-6 py-4">
                     <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                      res.status === 'confirmed' 
-                        ? 'bg-blue-100 text-blue-800' 
+                      res.status === 'confirmed'
+                        ? 'bg-blue-100 text-blue-800'
                         : 'bg-yellow-100 text-yellow-800'
                     }`}>
                       {res.status === 'confirmed' ? '確定' : '待機中'}
