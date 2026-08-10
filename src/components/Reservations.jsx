@@ -118,11 +118,13 @@ export default function Reservations() {
                   <td className="px-6 py-4 text-gray-600 text-sm">{res.notes || '-'}</td>
                   <td className="px-6 py-4">
                     <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                      res.status === 'confirmed'
+                      res.status === 'cancelled'
+                        ? 'bg-gray-200 text-gray-600 line-through'
+                        : res.status === 'confirmed'
                         ? 'bg-blue-100 text-blue-800'
                         : 'bg-yellow-100 text-yellow-800'
                     }`}>
-                      {res.status === 'confirmed' ? '確定' : '待機中'}
+                      {res.status === 'cancelled' ? 'キャンセル' : res.status === 'confirmed' ? '確定' : '待機中'}
                     </span>
                   </td>
                   <td className="px-6 py-4 space-x-2">
