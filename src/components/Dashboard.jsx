@@ -54,6 +54,17 @@ export default function Dashboard({ user, onLogout }) {
 
   const stats = calculateMonthlyStats();
 
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const activeReservations = reservations.filter(r => r.status !== 'cancelled');
+  const todayTasks = activeReservations
+    .filter(r => (r.cleaningDate || r.checkOut) === todayStr)
+    .sort((a, b) => (b.hasCheckIn ? 1 : 0) - (a.hasCheckIn ? 1 : 0));
+  const upcomingCheckIns = activeReservations
+    .filter(r => r.hasCheckIn && (r.cleaningDate || r.checkOut) >= todayStr)
+    .sort((a, b) => (a.cleaningDate || a.checkOut).localeCompare(b.cleaningDate || b.checkOut))
+    .slice(0, 5);
+  const cancelledCount = reservations.filter(r => r.status === 'cancelled').length;
+
   return (
     <div className="min-h-screen bg-gray-50">
       <nav className="bg-white shadow-md">
@@ -114,7 +125,62 @@ export default function Dashboard({ user, onLogout }) {
           {currentPage === 'overview' && (
             <div>
               <h2 className="text-3xl font-bold text-gray-800 mb-6">📊 ダッシュボード</h2>
-              
+
+              {/* チェックインあり優先案件（全員に表示） */}
+              {upcomingCheckIns.length > 0 && (
+                <div className="bg-orange-50 border-l-4 border-orange-500 rounded-lg shadow-md p-6 mb-8">
+                  <h3 className="text-lg font-bold text-orange-800 mb-3">
+                    ⚠️ チェックインあり・優先対応が必要な予定
+                  </h3>
+                  <ul className="space-y-2">
+                    {upcomingCheckIns.map((r) => (
+                      <li key={r.id} className="flex items-center justify-between bg-white rounded-lg px-4 py-2 shadow-sm">
+                        <div>
+                          <span className="font-semibold text-gray-800">{r.propertyName || r.guestName}</span>
+                          <span className="text-sm text-gray-500 ml-3">
+                            {r.cleaningDate || r.checkOut}
+                            {r.checkInTime ? `（イン ${r.checkInTime}）` : ''}
+                          </span>
+                        </div>
+                        <span className="text-xs font-bold bg-orange-500 text-white px-2 py-1 rounded-full">
+                          🔴 イン当日
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* 本日の清掃予定（全員に表示） */}
+              <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+                <h3 className="text-lg font-bold text-gray-800 mb-3">📅 本日の清掃予定（{todayStr}）</h3>
+                {todayTasks.length === 0 ? (
+                  <p className="text-gray-500">本日の清掃予定はありません</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {todayTasks.map((r) => (
+                      <li
+                        key={r.id}
+                        className={`flex items-center justify-between px-4 py-2 rounded-lg ${
+                          r.hasCheckIn ? 'bg-orange-50' : 'bg-gray-50'
+                        }`}
+                      >
+                        <div>
+                          <span className="font-semibold text-gray-800">{r.propertyName || r.guestName}</span>
+                          <span className="text-sm text-gray-500 ml-3">{r.persons ? `${r.persons}名` : ''}</span>
+                          {r.notes && <span className="text-xs text-gray-400 ml-3">{r.notes}</span>}
+                        </div>
+                        {r.hasCheckIn && (
+                          <span className="text-xs font-bold bg-orange-500 text-white px-2 py-1 rounded-full">
+                            🔴 イン{r.checkInTime ? ` ${r.checkInTime}` : ''}
+                          </span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
               {/* 管理者のみが見れるセクション */}
               {isAdmin && (
                 <div className="mb-8">
@@ -138,7 +204,7 @@ export default function Dashboard({ user, onLogout }) {
               )}
 
               {/* 全員が見れるセクション */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 <div className="bg-white rounded-lg shadow-md p-6">
                   <h3 className="text-lg font-semibold text-gray-700 mb-2">清掃件数</h3>
                   <p className="text-3xl font-bold text-blue-500">{reservations.filter(r => r.status === 'confirmed').length}</p>
@@ -149,7 +215,11 @@ export default function Dashboard({ user, onLogout }) {
                 </div>
                 <div className="bg-white rounded-lg shadow-md p-6">
                   <h3 className="text-lg font-semibold text-gray-700 mb-2">総件数</h3>
-                  <p className="text-3xl font-bold text-green-500">{reservations.length}</p>
+                  <p className="text-3xl font-bold text-green-500">{activeReservations.length}</p>
+                </div>
+                <div className="bg-white rounded-lg shadow-md p-6">
+                  <h3 className="text-lg font-semibold text-gray-700 mb-2">キャンセル</h3>
+                  <p className="text-3xl font-bold text-gray-400">{cancelledCount}</p>
                 </div>
               </div>
             </div>
