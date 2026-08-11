@@ -59,10 +59,6 @@ export default function Dashboard({ user, onLogout }) {
   const todayTasks = activeReservations
     .filter(r => (r.cleaningDate || r.checkOut) === todayStr)
     .sort((a, b) => (b.hasCheckIn ? 1 : 0) - (a.hasCheckIn ? 1 : 0));
-  const upcomingCheckIns = activeReservations
-    .filter(r => r.hasCheckIn && (r.cleaningDate || r.checkOut) >= todayStr)
-    .sort((a, b) => (a.cleaningDate || a.checkOut).localeCompare(b.cleaningDate || b.checkOut))
-    .slice(0, 5);
   const cancelledCount = reservations.filter(r => r.status === 'cancelled').length;
 
   return (
@@ -126,32 +122,7 @@ export default function Dashboard({ user, onLogout }) {
             <div>
               <h2 className="text-3xl font-bold text-gray-800 mb-6">📊 ダッシュボード</h2>
 
-              {/* チェックインあり優先案件（全員に表示） */}
-              {upcomingCheckIns.length > 0 && (
-                <div className="bg-orange-50 border-l-4 border-orange-500 rounded-lg shadow-md p-6 mb-8">
-                  <h3 className="text-lg font-bold text-orange-800 mb-3">
-                    ⚠️ チェックインあり・優先対応が必要な予定
-                  </h3>
-                  <ul className="space-y-2">
-                    {upcomingCheckIns.map((r) => (
-                      <li key={r.id} className="flex items-center justify-between bg-white rounded-lg px-4 py-2 shadow-sm">
-                        <div>
-                          <span className="font-semibold text-gray-800">{r.propertyName || r.guestName}</span>
-                          <span className="text-sm text-gray-500 ml-3">
-                            {r.cleaningDate || r.checkOut}
-                            {r.checkInTime ? `（イン ${r.checkInTime}）` : ''}
-                          </span>
-                        </div>
-                        <span className="text-xs font-bold bg-orange-500 text-white px-2 py-1 rounded-full">
-                          🔴 イン当日
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* 本日の清掃予定（全員に表示） */}
+              {/* 本日の清掃予定（全員に表示、チェックインありは強調） */}
               <div className="bg-white rounded-lg shadow-md p-6 mb-8">
                 <h3 className="text-lg font-bold text-gray-800 mb-3">📅 本日の清掃予定（{todayStr}）</h3>
                 {todayTasks.length === 0 ? (
