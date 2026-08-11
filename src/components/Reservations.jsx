@@ -45,11 +45,8 @@ export default function Reservations() {
     setSelectedReservation(null);
   };
 
-  // チェックインありを優先的に上部表示、その後は清掃日順
+  // 清掃日順（チェックインの有無では並び替えない。表示上のバッジ・強調のみ）
   const sortedReservations = [...reservations].sort((a, b) => {
-    if (!!b.hasCheckIn !== !!a.hasCheckIn) {
-      return (b.hasCheckIn ? 1 : 0) - (a.hasCheckIn ? 1 : 0);
-    }
     const dateA = a.cleaningDate || a.checkOut || '';
     const dateB = b.cleaningDate || b.checkOut || '';
     return dateA.localeCompare(dateB);
