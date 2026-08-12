@@ -1,4 +1,5 @@
 const { getSheetsClient, columnLetterToIndex, fetchSheetRows } = require('./sheetsClient');
+const { getDriveClient, fetchExcelRows } = require('./excelClient');
 
 /**
  * 年なし日付("04/12"等)に、今日から見て最も近い年を推測して付与する。
@@ -83,10 +84,106 @@ function getCutoffDate(syncPastDays) {
 }
 
 /**
- * 1つのシート設定を処理し、Firestoreのreservationsコレクションへupsertする候補データを作る
+ * 部屋×日付のグリッド形式（PMS/チャンネルマネージャー等の自動出力）を解析する。
+ * - 1行目: 月ラベル（例: "2026年7月"）が列をまたいで断続的に出現
+ * - 2行目: 日にち（1,2,3...）
+ * - 3行目: 曜日（未使用）
+ * - dataRowStart〜dataRowEnd: 部屋ごとの行。セルに数字があれば「その日が清掃（チェックアウト）日、値=人数」
+ * このグリッドにはチェックイン日の情報がないため checkInDate は null、hasCheckIn は常に false。
  */
-async function buildReservationsForConfig(sheets, config) {
-  const rows = await fetchSheetRows(sheets, config.sheetId, config.tabName);
+function buildGridReservationsForConfig(rows, config) {
+  const g = config.grid || {};
+  const monthRowIdx = (g.monthRow || 1) - 1;
+  const dayRowIdx = (g.dayRow || 2) - 1;
+  const dataStart = g.dataRowStart || 4;
+  const dataEnd = g.dataRowEnd || dataStart;
+  const cutoffDate = getCutoffDate(config.syncPastDays);
+
+  const monthRowValues = (rows[monthRowIdx] && rows[monthRowIdx].values) || [];
+  const dayRowValues = (rows[dayRowIdx] && rows[dayRowIdx].values) || [];
+
+  // 列インデックス -> "YYYY-MM-DD" のマップを作成
+  const dateByCol = {};
+  let curYear = null;
+  let curMonth = null;
+  for (let col = 0; col < monthRowValues.length; col++) {
+    const label = (monthRowValues[col] || '').trim();
+    const m = label.match(/^(\d{4})年(\d{1,2})月/);
+    if (m) {
+      curYear = parseInt(m[1], 10);
+      curMonth = parseInt(m[2], 10);
+    }
+    if (curYear && curMonth) {
+      const dayNum = parseInt((dayRowValues[col] || '').trim(), 10);
+      if (!isNaN(dayNum) && dayNum >= 1 && dayNum <= 31) {
+        dateByCol[col] = `${curYear}-${String(curMonth).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+      }
+    }
+  }
+
+  const roomMap = config.mode === 'multi' ? config.roomPropertyMap || {} : null;
+  const reservations = [];
+
+  for (const row of rows) {
+    if (row.rowIndex < dataStart || row.rowIndex > dataEnd) continue;
+    const label = (row.values[0] || '').trim();
+    if (!label || label === '稼働率') continue; // 集計行等はスキップ
+
+    let propertyName;
+    if (config.mode === 'multi') {
+      propertyName = roomMap[label];
+      if (!propertyName) continue; // 未マッピングの部屋行は取り込まない
+    } else {
+      propertyName = config.propertyName;
+    }
+
+    for (let col = 1; col < row.values.length; col++) {
+      const raw = (row.values[col] || '').trim();
+      if (!raw) continue;
+      const persons = parseInt(raw, 10);
+      if (isNaN(persons)) continue;
+      const cleaningDate = dateByCol[col];
+      if (!cleaningDate || cleaningDate < cutoffDate) continue;
+
+      reservations.push({
+        docId: `sheet_${sanitizeForId(config.sheetId)}_${sanitizeForId(config.tabName)}_r${row.rowIndex}c${col}`,
+        data: {
+          propertyName,
+          cleaningDate,
+          checkInDate: null,
+          persons,
+          notes: '',
+          status: 'confirmed',
+          hasCheckIn: false,
+          checkInTime: '',
+          source: 'sheet',
+          sheetId: config.sheetId,
+          sheetConfigId: config.id,
+          sourceRow: row.rowIndex,
+        },
+      });
+    }
+  }
+
+  return reservations;
+}
+
+/**
+ * 1つのシート設定を処理し、Firestoreのreservationsコレクションへupsertする候補データを作る
+ * clients: { sheets, drive } - config.sourceType === 'excel'/'excel-grid' の場合は drive、それ以外は sheets を使用
+ */
+async function buildReservationsForConfig(clients, config) {
+  const sourceType = config.sourceType || 'sheets';
+
+  if (sourceType === 'excel-grid') {
+    const rows = await fetchExcelRows(clients.drive, config.sheetId, config.tabName);
+    return buildGridReservationsForConfig(rows, config);
+  }
+
+  const rows =
+    sourceType === 'excel'
+      ? await fetchExcelRows(clients.drive, config.sheetId, config.tabName)
+      : await fetchSheetRows(clients.sheets, config.sheetId, config.tabName);
   const headerRow = config.headerRow || 1;
   const cutoffDate = getCutoffDate(config.syncPastDays);
 
@@ -208,6 +305,8 @@ async function buildReservationsForConfig(sheets, config) {
  */
 async function syncAllSheets(db, serviceAccountKeyJson) {
   const sheets = getSheetsClient(serviceAccountKeyJson);
+  const drive = getDriveClient(serviceAccountKeyJson);
+  const clients = { sheets, drive };
   const configsSnap = await db.collection('sheetConfigs').where('active', '==', true).get();
 
   const results = [];
@@ -215,7 +314,7 @@ async function syncAllSheets(db, serviceAccountKeyJson) {
   for (const doc of configsSnap.docs) {
     const config = { id: doc.id, ...doc.data() };
     try {
-      const reservations = await buildReservationsForConfig(sheets, config);
+      const reservations = await buildReservationsForConfig(clients, config);
       const batch = db.batch();
       reservations.forEach((r) => {
         const ref = db.collection('reservations').doc(r.docId);
