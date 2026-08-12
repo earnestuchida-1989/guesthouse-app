@@ -40,7 +40,13 @@ async function buildReservationsForConfig(sheets, config) {
   const checkInIdx = columnLetterToIndex(config.columns.checkIn);
   const checkOutIdx = columnLetterToIndex(config.columns.checkOut);
   const personsIdx = columnLetterToIndex(config.columns.persons);
-  const notesIdx = config.columns.notes ? columnLetterToIndex(config.columns.notes) : -1;
+  // notesは単一列("D")でも複数列(["D","E"])でも指定可能。複数の場合は結合する。
+  const notesLetters = config.columns.notes
+    ? Array.isArray(config.columns.notes)
+      ? config.columns.notes
+      : [config.columns.notes]
+    : [];
+  const notesIdxs = notesLetters.map((l) => columnLetterToIndex(l));
   const propertyIdx =
     config.mode === 'multi' && config.propertyColumn ? columnLetterToIndex(config.propertyColumn) : -1;
 
@@ -53,7 +59,10 @@ async function buildReservationsForConfig(sheets, config) {
     const checkOutRaw = row.values[checkOutIdx];
     if (!checkInRaw && !checkOutRaw) continue; // 完全な空行はスキップ
 
-    const notes = notesIdx >= 0 ? (row.values[notesIdx] || '').trim() : '';
+    const notes = notesIdxs
+      .map((idx) => (row.values[idx] || '').trim())
+      .filter(Boolean)
+      .join(' / ');
     if (notes.startsWith('例') || notes.startsWith('例：')) continue; // シート内の入力例行をスキップ
 
     const checkIn = normalizeDate(checkInRaw);
