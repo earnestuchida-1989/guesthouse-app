@@ -73,6 +73,17 @@ exports.lineWebhook = onRequest(
 
     try {
       const events = (req.body && req.body.events) || [];
+      logger.info(
+        'lineWebhook: received',
+        events.map((e) => ({
+          type: e.type,
+          messageType: e.message && e.message.type,
+          sourceType: e.source && e.source.type,
+          groupId: e.source && e.source.groupId,
+          roomId: e.source && e.source.roomId,
+          userId: e.source && e.source.userId,
+        }))
+      );
       const results = await processLineEvents(db, events);
       logger.info('lineWebhook: processed', { results });
       res.status(200).json({ ok: true, results });
