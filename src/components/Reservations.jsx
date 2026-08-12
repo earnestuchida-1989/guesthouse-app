@@ -52,18 +52,11 @@ export default function Reservations() {
     return dateA.localeCompare(dateB);
   });
 
-  const checkInCount = reservations.filter(r => r.hasCheckIn).length;
-
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold text-gray-800">清掃スケジュール管理</h1>
-          {checkInCount > 0 && (
-            <p className="text-sm text-orange-700 font-semibold mt-1">
-              ⚠️ 本日以降、チェックインありの予定が {checkInCount} 件あります（優先対応）
-            </p>
-          )}
         </div>
         <button
           onClick={() => setShowAddModal(true)}
