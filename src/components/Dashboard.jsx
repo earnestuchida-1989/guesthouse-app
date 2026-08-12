@@ -55,11 +55,12 @@ export default function Dashboard({ user, onLogout }) {
   const stats = calculateMonthlyStats();
 
   const todayStr = new Date().toISOString().slice(0, 10);
-  const activeReservations = reservations.filter(r => r.status !== 'cancelled');
+  const activeReservations = reservations.filter(r => r.status !== 'cancelled' && r.status !== 'no_cleaning_needed');
   const todayTasks = activeReservations
     .filter(r => (r.cleaningDate || r.checkOut) === todayStr)
     .sort((a, b) => (b.hasCheckIn ? 1 : 0) - (a.hasCheckIn ? 1 : 0));
   const cancelledCount = reservations.filter(r => r.status === 'cancelled').length;
+  const noCleaningNeededCount = reservations.filter(r => r.status === 'no_cleaning_needed').length;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -175,7 +176,7 @@ export default function Dashboard({ user, onLogout }) {
               )}
 
               {/* 全員が見れるセクション */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
                 <div className="bg-white rounded-lg shadow-md p-6">
                   <h3 className="text-lg font-semibold text-gray-700 mb-2">清掃件数</h3>
                   <p className="text-3xl font-bold text-blue-500">{reservations.filter(r => r.status === 'confirmed').length}</p>
@@ -187,6 +188,10 @@ export default function Dashboard({ user, onLogout }) {
                 <div className="bg-white rounded-lg shadow-md p-6">
                   <h3 className="text-lg font-semibold text-gray-700 mb-2">総件数</h3>
                   <p className="text-3xl font-bold text-green-500">{activeReservations.length}</p>
+                </div>
+                <div className="bg-white rounded-lg shadow-md p-6">
+                  <h3 className="text-lg font-semibold text-gray-700 mb-2">清掃不要</h3>
+                  <p className="text-3xl font-bold text-purple-400">{noCleaningNeededCount}</p>
                 </div>
                 <div className="bg-white rounded-lg shadow-md p-6">
                   <h3 className="text-lg font-semibold text-gray-700 mb-2">キャンセル</h3>

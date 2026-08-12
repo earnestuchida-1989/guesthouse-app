@@ -110,11 +110,19 @@ export default function Reservations() {
                     <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
                       res.status === 'cancelled'
                         ? 'bg-gray-200 text-gray-600 line-through'
+                        : res.status === 'no_cleaning_needed'
+                        ? 'bg-purple-100 text-purple-700'
                         : res.status === 'confirmed'
                         ? 'bg-blue-100 text-blue-800'
                         : 'bg-yellow-100 text-yellow-800'
                     }`}>
-                      {res.status === 'cancelled' ? 'キャンセル' : res.status === 'confirmed' ? '確定' : '待機中'}
+                      {res.status === 'cancelled'
+                        ? 'キャンセル'
+                        : res.status === 'no_cleaning_needed'
+                        ? '清掃不要'
+                        : res.status === 'confirmed'
+                        ? '確定'
+                        : '待機中'}
                     </span>
                   </td>
                   <td className="px-6 py-4 space-x-2">

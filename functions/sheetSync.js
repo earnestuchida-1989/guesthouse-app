@@ -256,9 +256,13 @@ async function buildReservationsForConfig(clients, config) {
     const rowHasCancelText = row.values.some((v) => (v || '').includes('キャンセル'));
     const cancelled = rowHasStrike || rowHasCancelText;
 
+    // 「清掃不要」判定: 宿泊はあるが清掃作業自体が不要なケース
+    const noCleaningNeeded = !cancelled && row.values.some((v) => (v || '').includes('清掃不要'));
+
     stays.push({
       rowIndex: row.rowIndex,
       propertyName,
+      noCleaningNeeded,
       checkIn,
       checkOut,
       cleaningDate,
@@ -295,7 +299,7 @@ async function buildReservationsForConfig(clients, config) {
           checkInDate: stay.checkIn || null,
           persons: stay.persons,
           notes: stay.notes,
-          status: stay.cancelled ? 'cancelled' : 'confirmed',
+          status: stay.cancelled ? 'cancelled' : stay.noCleaningNeeded ? 'no_cleaning_needed' : 'confirmed',
           hasCheckIn,
           checkInTime: stay.checkInTime || '',
           source: 'sheet',
