@@ -6,12 +6,15 @@ const { defineSecret } = require('firebase-functions/params');
 const logger = require('firebase-functions/logger');
 
 const { syncAllSheets } = require('./sheetSync');
+const { verifySignature, processLineEvents } = require('./lineWebhook');
 
 initializeApp();
 const db = getFirestore();
 
 const GOOGLE_SERVICE_ACCOUNT_KEY = defineSecret('GOOGLE_SERVICE_ACCOUNT_KEY');
 const SYNC_SECRET = defineSecret('SYNC_SECRET');
+const LINE_CHANNEL_SECRET = defineSecret('LINE_CHANNEL_SECRET');
+const LINE_CHANNEL_ACCESS_TOKEN = defineSecret('LINE_CHANNEL_ACCESS_TOKEN');
 
 // 1時間ごとに全アクティブシートを自動同期
 exports.scheduledSheetSync = onSchedule(
@@ -47,6 +50,36 @@ exports.manualSheetSync = onRequest(
     } catch (err) {
       logger.error('manualSheetSync failed', err);
       res.status(500).json({ ok: false, error: err.message });
+    }
+  }
+);
+
+// LINE Messaging API Webhook
+// 登録済みの lineConfigs（グループ/ルームID）からのメッセージのみ解析し、reservationsへ反映する
+exports.lineWebhook = onRequest(
+  {
+    secrets: [LINE_CHANNEL_SECRET, LINE_CHANNEL_ACCESS_TOKEN],
+    region: 'asia-northeast1',
+  },
+  async (req, res) => {
+    const signature = req.get('x-line-signature');
+    const rawBody = req.rawBody;
+
+    if (!verifySignature(rawBody, signature, LINE_CHANNEL_SECRET.value())) {
+      logger.warn('lineWebhook: invalid signature');
+      res.status(403).send('invalid signature');
+      return;
+    }
+
+    try {
+      const events = (req.body && req.body.events) || [];
+      const results = await processLineEvents(db, events);
+      logger.info('lineWebhook: processed', { results });
+      res.status(200).json({ ok: true, results });
+    } catch (err) {
+      logger.error('lineWebhook failed', err);
+      // LINE側の再送を避けるため200を返す（エラーはログで確認）
+      res.status(200).json({ ok: false, error: err.message });
     }
   }
 );

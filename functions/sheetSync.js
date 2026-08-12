@@ -1,5 +1,6 @@
 const { getSheetsClient, columnLetterToIndex, fetchSheetRows } = require('./sheetsClient');
 const { getDriveClient, fetchExcelRows } = require('./excelClient');
+const { getCalendarClient, fetchCalendarEvents } = require('./calendarClient');
 
 /**
  * 年なし日付("04/12"等)に、今日から見て最も近い年を推測して付与する。
@@ -169,11 +170,117 @@ function buildGridReservationsForConfig(rows, config) {
 }
 
 /**
+ * Googleカレンダーのイベントを解析する。
+ * タイトル形式: "【物件名】ゲスト名 N名[+乳児M名] ※詳細情報" を想定。
+ * イベントの開始日=チェックイン、終了日（終日イベントは排他的なので、そのままチェックアウト/清掃日として使える）。
+ * このカレンダーには全物件が混在しているため常に mode: 'multi' 相当（物件名はタイトルから抽出）。
+ */
+async function buildCalendarReservationsForConfig(calendar, config) {
+  const cutoffDate = getCutoffDate(config.syncPastDays);
+  const futureDays = config.calendarFutureDays || 400;
+  const timeMin = new Date();
+  timeMin.setDate(timeMin.getDate() - (config.syncPastDays || DEFAULT_SYNC_PAST_DAYS) - 1);
+  const timeMax = new Date();
+  timeMax.setDate(timeMax.getDate() + futureDays);
+
+  const events = await fetchCalendarEvents(
+    calendar,
+    config.calendarId,
+    timeMin.toISOString(),
+    timeMax.toISOString()
+  );
+
+  const titlePattern = /^【(.+?)】\s*(.*)$/;
+  // ゲスト名の直後にある "N名"（＋乳児M名）だけを人数として拾う。備考中の「1名追加」等の誤検出を避けるため先頭のみに限定。
+  const headCountPattern = /^(\S+)\s*(\d+)名(?:\+乳児(\d+)名)?/;
+
+  const stays = [];
+  for (const event of events) {
+    const title = (event.summary || '').trim();
+    if (!title) continue;
+
+    const m = title.match(titlePattern);
+    if (!m) continue; // 物件名の記法に合わないイベントはスキップ（社内メモ等）
+
+    const propertyName = m[1].trim();
+    const rest = m[2] || '';
+
+    const headMatch = rest.match(headCountPattern);
+    const persons = headMatch
+      ? parseInt(headMatch[2], 10) + (headMatch[3] ? parseInt(headMatch[3], 10) : 0)
+      : null;
+
+    const checkIn = event.start && (event.start.date || (event.start.dateTime || '').slice(0, 10));
+    // 終日イベントの終了日はAPI上「排他的」＝最終日の翌日として返る。これがそのままチェックアウト/清掃日に一致する。
+    const cleaningDate = event.end && (event.end.date || (event.end.dateTime || '').slice(0, 10));
+    if (!cleaningDate) continue;
+
+    const notes = [rest.replace(headCountPattern, '').trim(), event.description || '']
+      .filter(Boolean)
+      .join(' / ');
+
+    const cancelled =
+      event.status === 'cancelled' ||
+      title.includes('キャンセル') ||
+      (event.description || '').includes('キャンセル');
+    const noCleaningNeeded = !cancelled && (title.includes('清掃不要') || (event.description || '').includes('清掃不要'));
+
+    stays.push({
+      eventId: event.id,
+      propertyName,
+      checkIn,
+      cleaningDate,
+      persons,
+      notes,
+      cancelled,
+      noCleaningNeeded,
+    });
+  }
+
+  const checkInDatesByProperty = {};
+  for (const stay of stays) {
+    if (!stay.checkIn) continue;
+    if (!checkInDatesByProperty[stay.propertyName]) {
+      checkInDatesByProperty[stay.propertyName] = new Set();
+    }
+    checkInDatesByProperty[stay.propertyName].add(stay.checkIn);
+  }
+
+  return stays
+    .filter((stay) => stay.cleaningDate >= cutoffDate)
+    .map((stay) => {
+      const hasCheckIn =
+        !!checkInDatesByProperty[stay.propertyName] &&
+        checkInDatesByProperty[stay.propertyName].has(stay.cleaningDate);
+      return {
+        docId: `cal_${sanitizeForId(config.calendarId)}_${sanitizeForId(stay.eventId)}`,
+        data: {
+          propertyName: stay.propertyName,
+          cleaningDate: stay.cleaningDate,
+          checkInDate: stay.checkIn || null,
+          persons: stay.persons,
+          notes: stay.notes,
+          status: stay.cancelled ? 'cancelled' : stay.noCleaningNeeded ? 'no_cleaning_needed' : 'confirmed',
+          hasCheckIn,
+          checkInTime: '',
+          source: 'calendar',
+          calendarId: config.calendarId,
+          sheetConfigId: config.id,
+        },
+      };
+    });
+}
+
+/**
  * 1つのシート設定を処理し、Firestoreのreservationsコレクションへupsertする候補データを作る
- * clients: { sheets, drive } - config.sourceType === 'excel'/'excel-grid' の場合は drive、それ以外は sheets を使用
+ * clients: { sheets, drive, calendar } - config.sourceType により使用クライアントを切り替え
  */
 async function buildReservationsForConfig(clients, config) {
   const sourceType = config.sourceType || 'sheets';
+
+  if (sourceType === 'calendar') {
+    return buildCalendarReservationsForConfig(clients.calendar, config);
+  }
 
   if (sourceType === 'excel-grid') {
     const rows = await fetchExcelRows(clients.drive, config.sheetId, config.tabName);
@@ -319,7 +426,8 @@ async function buildReservationsForConfig(clients, config) {
 async function syncAllSheets(db, serviceAccountKeyJson) {
   const sheets = getSheetsClient(serviceAccountKeyJson);
   const drive = getDriveClient(serviceAccountKeyJson);
-  const clients = { sheets, drive };
+  const calendar = getCalendarClient(serviceAccountKeyJson);
+  const clients = { sheets, drive, calendar };
   const configsSnap = await db.collection('sheetConfigs').where('active', '==', true).get();
 
   const results = [];
