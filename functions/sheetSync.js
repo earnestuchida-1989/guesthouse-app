@@ -222,7 +222,16 @@ async function buildReservationsForConfig(clients, config) {
       .map((idx) => (row.values[idx] || '').trim())
       .filter(Boolean)
       .join(' / ');
-    if (notes.startsWith('例') || notes.startsWith('例：')) continue; // シート内の入力例行をスキップ
+    // シート内の入力例行をスキップ（備考欄、またはチェックイン/チェックアウト欄自体に「例」と書かれているケース）
+    const checkInTrimmed = (checkInRaw || '').trim();
+    const checkOutTrimmed = (checkOutRaw || '').trim();
+    if (
+      notes.startsWith('例') ||
+      checkInTrimmed.startsWith('例') ||
+      checkOutTrimmed.startsWith('例')
+    ) {
+      continue;
+    }
 
     const checkIn = normalizeDate(checkInRaw);
     const checkOut = normalizeDate(checkOutRaw);
