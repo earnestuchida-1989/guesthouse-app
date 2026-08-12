@@ -1,12 +1,11 @@
 import { useState } from 'react';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
+import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../firebase';
 
 export default function Login({ onLoginSuccess }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [isSignUp, setIsSignUp] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleAuth = async (e) => {
@@ -15,14 +14,10 @@ export default function Login({ onLoginSuccess }) {
     setLoading(true);
 
     try {
-      if (isSignUp) {
-        await createUserWithEmailAndPassword(auth, email, password);
-      } else {
-        await signInWithEmailAndPassword(auth, email, password);
-      }
+      await signInWithEmailAndPassword(auth, email, password);
       onLoginSuccess();
     } catch (err) {
-      setError(err.message);
+      setError('ログインに失敗しました。メールアドレス・パスワードをご確認ください。');
     } finally {
       setLoading(false);
     }
@@ -68,17 +63,13 @@ export default function Login({ onLoginSuccess }) {
             disabled={loading}
             className="w-full bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white font-bold py-2 px-4 rounded-lg transition"
           >
-            {loading ? '処理中...' : isSignUp ? '登録' : 'ログイン'}
+            {loading ? '処理中...' : 'ログイン'}
           </button>
         </form>
 
-        <button
-          type="button"
-          onClick={() => setIsSignUp(!isSignUp)}
-          className="w-full text-center text-blue-500 hover:text-blue-700 mt-4 text-sm"
-        >
-          {isSignUp ? 'ログイン画面へ' : '新規登録する'}
-        </button>
+        <p className="text-center text-gray-500 text-sm mt-6">
+          アカウントをお持ちでない方は、管理者にお問い合わせください。
+        </p>
       </div>
     </div>
   );

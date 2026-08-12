@@ -5,6 +5,7 @@ import { onReservationsChange } from '../services/reservationService';
 import { PROPERTY_PRICES, COST_RATIO } from '../data/propertyPrices';
 import Reservations from './Reservations';
 import Schedule from './Schedule';
+import AccountManagement from './AccountManagement';
 
 export default function Dashboard({ user, onLogout }) {
   const [currentPage, setCurrentPage] = useState('overview');
@@ -115,6 +116,18 @@ export default function Dashboard({ user, onLogout }) {
             >
               🗓️ スケジュール
             </button>
+            {isAdmin && (
+              <button
+                onClick={() => setCurrentPage('accounts')}
+                className={`w-full text-left px-4 py-2 rounded-lg transition ${
+                  currentPage === 'accounts'
+                    ? 'bg-blue-500 text-white'
+                    : 'text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                👥 アカウント管理
+              </button>
+            )}
           </nav>
         </aside>
 
@@ -204,6 +217,8 @@ export default function Dashboard({ user, onLogout }) {
           {currentPage === 'reservations' && <Reservations />}
 
           {currentPage === 'schedule' && <Schedule />}
+
+          {currentPage === 'accounts' && isAdmin && <AccountManagement currentUid={user?.uid} />}
         </main>
       </div>
     </div>

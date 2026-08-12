@@ -1,0 +1,27 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // usersコレクション: 権限情報を保護する。
+    // - 読み取り: ログイン済みなら誰でも可（自分や他スタッフの権限確認に必要）
+    // - 書き込み: クライアントからは一切不可。作成・ロール変更・有効/無効切替は
+    //   すべて Cloud Functions（管理者チェック済み・Admin SDK経由）でのみ行う。
+    // 注意: Firestoreルールは複数matchブロックがOR結合されるため、
+    // 下記の他コレクション用ワイルドカードにusersを含めないよう明示的に列挙している。
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
+    // その他のコレクションは開発フェーズのため引き続きオープン。
+    // 今後の課題として認証必須化を検討。
+    match /reservations/{docId} {
+      allow read, write: if true;
+    }
+    match /sheetConfigs/{docId} {
+      allow read, write: if true;
+    }
+    match /lineConfigs/{docId} {
+      allow read, write: if true;
+    }
+  }
+}

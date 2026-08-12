@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from './firebase';
+import { getUserDoc } from './services/userService';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
+
+const BOOTSTRAP_ADMIN_EMAIL = 'admin@guesthouse.local';
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -10,15 +13,31 @@ export default function App() {
   const [manualLogout, setManualLogout] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      if (currentUser) {
-        const userWithRole = {
-          ...currentUser,
-          role: currentUser.email === 'admin@guesthouse.local' ? 'admin' : 'staff'
-        };
-        setUser(userWithRole);
-      } else {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      if (!currentUser) {
         setUser(null);
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const userDoc = await getUserDoc(currentUser.uid);
+
+        if (userDoc && userDoc.active === false) {
+          // 無効化されたアカウントは即ログアウト
+          await signOut(auth);
+          setUser(null);
+          setLoading(false);
+          return;
+        }
+
+        setUser({
+          ...currentUser,
+          role: userDoc?.role || 'staff',
+        });
+      } catch (e) {
+        console.error('ユーザー情報取得エラー:', e);
+        setUser({ ...currentUser, role: 'staff' });
       }
       setLoading(false);
     });
@@ -32,7 +51,7 @@ export default function App() {
     if (!user && process.env.NODE_ENV === 'development') {
       // 管理者ロールでテスト
       setUser({
-        email: 'admin@guesthouse.local',
+        email: BOOTSTRAP_ADMIN_EMAIL,
         uid: 'admin-user-001',
         role: 'admin'
       });
