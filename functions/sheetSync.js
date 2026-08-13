@@ -47,6 +47,24 @@ function normalizeDate(raw, now) {
     return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
   }
 
+  // 日本語表記: "2026年7月20日"（年あり）
+  match = trimmed.match(/^(\d{4})年(\d{1,2})月(\d{1,2})日/);
+  if (match) {
+    const [, y, m, d] = match;
+    return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  }
+
+  // 日本語表記: "7月20日"（年なし。今日に最も近い年を自動推測）
+  match = trimmed.match(/^(\d{1,2})月(\d{1,2})日/);
+  if (match) {
+    const [, m, d] = match;
+    const month = parseInt(m, 10);
+    const day = parseInt(d, 10);
+    if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+    const year = inferYearForMonthDay(month, day, now);
+    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  }
+
   return null;
 }
 
