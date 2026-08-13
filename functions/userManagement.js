@@ -117,4 +117,38 @@ function makeSetUserActive(db) {
   });
 }
 
-module.exports = { makeCreateStaffAccount, makeSetUserRole, makeSetUserActive };
+/**
+ * 既存ユーザーのパスワードを再発行する（管理者専用）。
+ * 本人がパスワードを忘れた・初期パスワードを紛失した場合に使用。
+ */
+function makeResetUserPassword(db) {
+  return onCall({ region: 'asia-northeast1' }, async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'ログインが必要です');
+    }
+    await assertIsAdmin(db, request.auth.uid);
+
+    const { uid } = request.data || {};
+    if (!uid) {
+      throw new HttpsError('invalid-argument', 'uid は必須です');
+    }
+
+    const tempPassword = generateTempPassword();
+    let userRecord;
+    try {
+      userRecord = await getAuth().updateUser(uid, { password: tempPassword });
+    } catch (err) {
+      logger.error('resetUserPassword: updateUser failed', err);
+      throw new HttpsError('not-found', err.message);
+    }
+
+    return { uid, email: userRecord.email, tempPassword };
+  });
+}
+
+module.exports = {
+  makeCreateStaffAccount,
+  makeSetUserRole,
+  makeSetUserActive,
+  makeResetUserPassword,
+};

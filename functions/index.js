@@ -7,7 +7,12 @@ const logger = require('firebase-functions/logger');
 
 const { syncAllSheets } = require('./sheetSync');
 const { verifySignature, processLineEvents } = require('./lineWebhook');
-const { makeCreateStaffAccount, makeSetUserRole, makeSetUserActive } = require('./userManagement');
+const {
+  makeCreateStaffAccount,
+  makeSetUserRole,
+  makeSetUserActive,
+  makeResetUserPassword,
+} = require('./userManagement');
 
 initializeApp();
 const db = getFirestore();
@@ -15,6 +20,7 @@ const db = getFirestore();
 exports.createStaffAccount = makeCreateStaffAccount(db);
 exports.setUserRole = makeSetUserRole(db);
 exports.setUserActive = makeSetUserActive(db);
+exports.resetUserPassword = makeResetUserPassword(db);
 
 const GOOGLE_SERVICE_ACCOUNT_KEY = defineSecret('GOOGLE_SERVICE_ACCOUNT_KEY');
 const SYNC_SECRET = defineSecret('SYNC_SECRET');

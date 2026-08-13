@@ -1,11 +1,18 @@
 import { useState, useEffect } from 'react';
-import { onUsersChange, createStaffAccount, setUserRole, setUserActive } from '../services/userService';
+import {
+  onUsersChange,
+  createStaffAccount,
+  setUserRole,
+  setUserActive,
+  resetUserPassword,
+} from '../services/userService';
 
 export default function AccountManagement({ currentUid }) {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [newAccountResult, setNewAccountResult] = useState(null);
+  const [resettingUid, setResettingUid] = useState(null);
 
   useEffect(() => {
     const unsubscribe = onUsersChange((data) => {
@@ -33,6 +40,19 @@ export default function AccountManagement({ currentUid }) {
       await setUserActive(u.id, nextActive);
     } catch (err) {
       alert('変更に失敗しました: ' + err.message);
+    }
+  };
+
+  const handleResetPassword = async (u) => {
+    if (!window.confirm(`${u.email} のパスワードを再発行しますか？\n現在のパスワードは使えなくなります。`)) return;
+    setResettingUid(u.id);
+    try {
+      const result = await resetUserPassword(u.id);
+      setNewAccountResult(result);
+    } catch (err) {
+      alert('再発行に失敗しました: ' + err.message);
+    } finally {
+      setResettingUid(null);
     }
   };
 
@@ -85,12 +105,19 @@ export default function AccountManagement({ currentUid }) {
                       {u.active === false ? '無効' : '有効'}
                     </span>
                   </td>
-                  <td className="px-6 py-4 space-x-2">
+                  <td className="px-6 py-4 space-x-2 whitespace-nowrap">
                     <button
                       onClick={() => handleRoleToggle(u)}
                       className="bg-purple-500 hover:bg-purple-600 text-white font-bold py-1 px-3 rounded text-sm transition"
                     >
                       権限切替
+                    </button>
+                    <button
+                      onClick={() => handleResetPassword(u)}
+                      disabled={resettingUid === u.id}
+                      className="bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 text-white font-bold py-1 px-3 rounded text-sm transition"
+                    >
+                      {resettingUid === u.id ? '発行中...' : 'パスワード再発行'}
                     </button>
                     <button
                       onClick={() => handleActiveToggle(u)}
@@ -125,14 +152,14 @@ export default function AccountManagement({ currentUid }) {
       {newAccountResult && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
-            <h3 className="text-xl font-bold text-gray-800 mb-4">✅ アカウントを作成しました</h3>
+            <h3 className="text-xl font-bold text-gray-800 mb-4">✅ パスワードを発行しました</h3>
             <p className="text-sm text-gray-600 mb-4">
-              このパスワードは今だけ表示されます。スタッフ本人に安全な方法（口頭・LINEなど）で伝えてください。
+              このパスワードは今だけ表示されます。本人に安全な方法（口頭・LINEなど）で伝えてください。
             </p>
             <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4 space-y-2">
               <p className="text-sm text-gray-500">メールアドレス</p>
               <p className="font-mono font-semibold text-gray-800">{newAccountResult.email}</p>
-              <p className="text-sm text-gray-500 mt-2">初期パスワード</p>
+              <p className="text-sm text-gray-500 mt-2">パスワード</p>
               <p className="font-mono font-semibold text-gray-800 text-lg">{newAccountResult.tempPassword}</p>
             </div>
             <button

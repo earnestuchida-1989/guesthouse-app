@@ -1,16 +1,19 @@
 import { useState } from 'react';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { auth } from '../firebase';
 
 export default function Login({ onLoginSuccess }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [info, setInfo] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
 
   const handleAuth = async (e) => {
     e.preventDefault();
     setError('');
+    setInfo('');
     setLoading(true);
 
     try {
@@ -20,6 +23,24 @@ export default function Login({ onLoginSuccess }) {
       setError('ログインに失敗しました。メールアドレス・パスワードをご確認ください。');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    setError('');
+    setInfo('');
+    if (!email) {
+      setError('パスワードをリセットするには、まずメールアドレスを入力してください。');
+      return;
+    }
+    setResetLoading(true);
+    try {
+      await sendPasswordResetEmail(auth, email);
+      setInfo('パスワード再設定用のメールを送信しました。メールボックス（迷惑メールフォルダも）をご確認ください。');
+    } catch (err) {
+      setError('送信に失敗しました。メールアドレスが正しいか、管理者にご確認ください。');
+    } finally {
+      setResetLoading(false);
     }
   };
 
@@ -36,6 +57,11 @@ export default function Login({ onLoginSuccess }) {
         {error && (
           <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
             {error}
+          </div>
+        )}
+        {info && (
+          <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
+            {info}
           </div>
         )}
 
@@ -66,6 +92,15 @@ export default function Login({ onLoginSuccess }) {
             {loading ? '処理中...' : 'ログイン'}
           </button>
         </form>
+
+        <button
+          type="button"
+          onClick={handleResetPassword}
+          disabled={resetLoading}
+          className="w-full text-center text-blue-500 hover:text-blue-700 mt-4 text-sm disabled:text-gray-400"
+        >
+          {resetLoading ? '送信中...' : 'パスワードをお忘れですか？'}
+        </button>
 
         <p className="text-center text-gray-500 text-sm mt-6">
           アカウントをお持ちでない方は、管理者にお問い合わせください。

@@ -37,3 +37,10 @@ export const setUserActive = async (uid, active) => {
   const fn = httpsCallable(functions, 'setUserActive');
   await fn({ uid, active });
 };
+
+// パスワード再発行（管理者専用、Cloud Function経由）
+export const resetUserPassword = async (uid) => {
+  const fn = httpsCallable(functions, 'resetUserPassword');
+  const res = await fn({ uid });
+  return res.data; // { uid, email, tempPassword }
+};
