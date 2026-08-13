@@ -34,6 +34,7 @@ export default function App() {
         setUser({
           ...currentUser,
           role: userDoc?.role || 'staff',
+          vendorId: userDoc?.vendorId || null,
         });
       } catch (e) {
         console.error('ユーザー情報取得エラー:', e);
