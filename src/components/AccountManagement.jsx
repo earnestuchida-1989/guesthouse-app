@@ -241,6 +241,7 @@ function InviteModal({ onClose, onCreated }) {
       const id = await addCustomer(newCustomerName.trim());
       setCustomerId(id);
       setNewCustomerName('');
+      setError('');
     } catch (err) {
       setError('顧客の追加に失敗しました: ' + err.message);
     } finally {
@@ -313,7 +314,10 @@ function InviteModal({ onClose, onCreated }) {
             <label className="block text-gray-700 font-semibold mb-2">権限</label>
             <select
               value={role}
-              onChange={(e) => setRole(e.target.value)}
+              onChange={(e) => {
+                setRole(e.target.value);
+                setError('');
+              }}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="staff">スタッフ</option>

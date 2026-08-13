@@ -1,12 +1,16 @@
 import { useState, useEffect } from 'react';
 import { onReservationsChange, updateReservation } from '../services/reservationService';
 import { onPropertiesChange } from '../services/propertyService';
+import { uploadReservationPhotos } from '../services/storageService';
 
 export default function CustomerReports({ user }) {
   const [reservations, setReservations] = useState([]);
   const [propertyMaster, setPropertyMaster] = useState({});
   const [loading, setLoading] = useState(true);
   const [feedbackDrafts, setFeedbackDrafts] = useState({});
+  const [feedbackFiles, setFeedbackFiles] = useState({});
+  const [feedbackPreviews, setFeedbackPreviews] = useState({});
+  const [feedbackProgress, setFeedbackProgress] = useState({});
   const [savingId, setSavingId] = useState(null);
 
   useEffect(() => {
@@ -41,21 +45,41 @@ export default function CustomerReports({ user }) {
     setFeedbackDrafts((prev) => ({ ...prev, [id]: value }));
   };
 
+  const handleFeedbackFileChange = (id, e) => {
+    const selected = Array.from(e.target.files || []);
+    setFeedbackFiles((prev) => ({ ...prev, [id]: selected }));
+    setFeedbackPreviews((prev) => ({ ...prev, [id]: selected.map((f) => URL.createObjectURL(f)) }));
+  };
+
   const handleSendFeedback = async (res) => {
     const comment = (feedbackDrafts[res.id] ?? '').trim();
-    if (!comment) return;
+    const files = feedbackFiles[res.id] || [];
+    if (!comment && files.length === 0) return;
     setSavingId(res.id);
     try {
+      let customerFeedbackPhotos = res.customerFeedbackPhotos || [];
+      if (files.length > 0) {
+        setFeedbackProgress((prev) => ({ ...prev, [res.id]: { done: 0, total: files.length } }));
+        const uploaded = await uploadReservationPhotos(res.id, files, (done, total) =>
+          setFeedbackProgress((prev) => ({ ...prev, [res.id]: { done, total } }))
+        );
+        customerFeedbackPhotos = [...customerFeedbackPhotos, ...uploaded];
+      }
+
       await updateReservation(res.id, {
-        customerFeedback: comment,
+        customerFeedback: comment || res.customerFeedback || '',
         customerFeedbackAt: new Date().toISOString(),
         customerFeedbackBy: user?.email || user?.uid || '',
+        customerFeedbackPhotos,
       });
       setFeedbackDrafts((prev) => ({ ...prev, [res.id]: '' }));
+      setFeedbackFiles((prev) => ({ ...prev, [res.id]: [] }));
+      setFeedbackPreviews((prev) => ({ ...prev, [res.id]: [] }));
     } catch (err) {
       alert('フィードバックの送信に失敗しました: ' + err.message);
     } finally {
       setSavingId(null);
+      setFeedbackProgress((prev) => ({ ...prev, [res.id]: null }));
     }
   };
 
@@ -119,9 +143,18 @@ export default function CustomerReports({ user }) {
 
               <div className="border-t pt-4">
                 <p className="font-semibold text-gray-700 mb-2">💬 フィードバック</p>
-                {res.customerFeedback && (
+                {(res.customerFeedback || (res.customerFeedbackPhotos && res.customerFeedbackPhotos.length > 0)) && (
                   <div className="bg-blue-50 rounded-lg p-3 mb-3 text-sm text-gray-700">
-                    <p>{res.customerFeedback}</p>
+                    {res.customerFeedback && <p>{res.customerFeedback}</p>}
+                    {res.customerFeedbackPhotos && res.customerFeedbackPhotos.length > 0 && (
+                      <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 mt-2">
+                        {res.customerFeedbackPhotos.map((url, i) => (
+                          <a key={i} href={url} target="_blank" rel="noreferrer">
+                            <img src={url} alt="" className="w-full h-16 object-cover rounded-lg border hover:opacity-80 transition" />
+                          </a>
+                        ))}
+                      </div>
+                    )}
                     {res.customerFeedbackAt && (
                       <p className="text-xs text-gray-400 mt-1">
                         {new Date(res.customerFeedbackAt).toLocaleString('ja-JP')}
@@ -129,21 +162,45 @@ export default function CustomerReports({ user }) {
                     )}
                   </div>
                 )}
-                <div className="flex gap-2">
+                <div className="space-y-2">
                   <input
                     type="text"
                     value={feedbackDrafts[res.id] ?? ''}
                     onChange={(e) => handleFeedbackChange(res.id, e.target.value)}
                     placeholder={res.customerFeedback ? 'コメントを更新する' : 'コメントを送る'}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
-                  <button
-                    onClick={() => handleSendFeedback(res)}
-                    disabled={savingId === res.id || !(feedbackDrafts[res.id] ?? '').trim()}
-                    className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white font-bold py-2 px-4 rounded-lg text-sm transition"
-                  >
-                    {savingId === res.id ? '送信中...' : '送信'}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={(e) => handleFeedbackFileChange(res.id, e)}
+                      className="flex-1 text-xs text-gray-600"
+                    />
+                    <button
+                      onClick={() => handleSendFeedback(res)}
+                      disabled={
+                        savingId === res.id ||
+                        (!(feedbackDrafts[res.id] ?? '').trim() && !(feedbackFiles[res.id]?.length))
+                      }
+                      className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white font-bold py-2 px-4 rounded-lg text-sm transition whitespace-nowrap"
+                    >
+                      {savingId === res.id ? '送信中...' : '送信'}
+                    </button>
+                  </div>
+                  {feedbackPreviews[res.id]?.length > 0 && (
+                    <div className="grid grid-cols-4 gap-2">
+                      {feedbackPreviews[res.id].map((src, i) => (
+                        <img key={i} src={src} alt="" className="w-full h-14 object-cover rounded-lg border" />
+                      ))}
+                    </div>
+                  )}
+                  {feedbackProgress[res.id] && (
+                    <div className="text-xs text-gray-500">
+                      写真アップロード中... {feedbackProgress[res.id].done} / {feedbackProgress[res.id].total}枚
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

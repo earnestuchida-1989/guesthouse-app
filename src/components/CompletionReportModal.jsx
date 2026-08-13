@@ -7,6 +7,7 @@ export default function CompletionReportModal({ reservation, currentUser, onClos
   const [previews, setPreviews] = useState([]);
   const [reportNote, setReportNote] = useState(reservation.reportNote || '');
   const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [error, setError] = useState('');
 
   const handleFileChange = (e) => {
@@ -19,10 +20,13 @@ export default function CompletionReportModal({ reservation, currentUser, onClos
     e.preventDefault();
     setError('');
     setUploading(true);
+    setProgress({ done: 0, total: files.length });
     try {
       let photoUrls = reservation.photoUrls || [];
       if (files.length > 0) {
-        const uploaded = await uploadReservationPhotos(reservation.id, files);
+        const uploaded = await uploadReservationPhotos(reservation.id, files, (done, total) =>
+          setProgress({ done, total })
+        );
         photoUrls = [...photoUrls, ...uploaded];
       }
 
@@ -65,17 +69,21 @@ export default function CompletionReportModal({ reservation, currentUser, onClos
 
           {reservation.photoUrls && reservation.photoUrls.length > 0 && (
             <div>
-              <label className="block text-gray-700 font-semibold mb-2">登録済みの写真</label>
-              <div className="grid grid-cols-3 gap-2">
+              <label className="block text-gray-700 font-semibold mb-2">
+                登録済みの写真（{reservation.photoUrls.length}枚）
+              </label>
+              <div className="grid grid-cols-4 gap-2 max-h-40 overflow-y-auto">
                 {reservation.photoUrls.map((url, i) => (
-                  <img key={i} src={url} alt="" className="w-full h-20 object-cover rounded-lg border" />
+                  <img key={i} src={url} alt="" className="w-full h-16 object-cover rounded-lg border" />
                 ))}
               </div>
             </div>
           )}
 
           <div>
-            <label className="block text-gray-700 font-semibold mb-2">写真を追加</label>
+            <label className="block text-gray-700 font-semibold mb-2">
+              写真を追加{files.length > 0 ? `（${files.length}枚選択中）` : ''}
+            </label>
             <input
               type="file"
               accept="image/*"
@@ -83,11 +91,28 @@ export default function CompletionReportModal({ reservation, currentUser, onClos
               onChange={handleFileChange}
               className="w-full text-sm text-gray-600"
             />
+            <p className="text-xs text-gray-400 mt-1">
+              まとめて数十枚選んでもOKです（自動で圧縮してからアップロードします）
+            </p>
             {previews.length > 0 && (
-              <div className="grid grid-cols-3 gap-2 mt-3">
+              <div className="grid grid-cols-4 gap-2 mt-3 max-h-56 overflow-y-auto">
                 {previews.map((src, i) => (
-                  <img key={i} src={src} alt="" className="w-full h-20 object-cover rounded-lg border" />
+                  <img key={i} src={src} alt="" className="w-full h-16 object-cover rounded-lg border" />
                 ))}
+              </div>
+            )}
+            {uploading && progress.total > 0 && (
+              <div className="mt-3">
+                <div className="flex justify-between text-xs text-gray-500 mb-1">
+                  <span>アップロード中...</span>
+                  <span>{progress.done} / {progress.total}枚</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div
+                    className="bg-green-500 h-2 rounded-full transition-all"
+                    style={{ width: `${(progress.done / progress.total) * 100}%` }}
+                  />
+                </div>
               </div>
             )}
           </div>
