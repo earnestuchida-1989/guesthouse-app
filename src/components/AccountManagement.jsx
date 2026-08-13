@@ -6,9 +6,17 @@ import {
   setUserActive,
   resetUserPassword,
 } from '../services/userService';
+import { onVendorsChange } from '../services/vendorService';
+
+const ROLE_LABELS = {
+  admin: '🔐 管理者',
+  staff: '👤 スタッフ',
+  contractor: '🏢 協力業者',
+};
 
 export default function AccountManagement({ currentUid }) {
   const [users, setUsers] = useState([]);
+  const [vendors, setVendors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [newAccountResult, setNewAccountResult] = useState(null);
@@ -19,10 +27,17 @@ export default function AccountManagement({ currentUid }) {
       setUsers(data.sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || '')));
       setLoading(false);
     });
-    return unsubscribe;
+    const unsubVendors = onVendorsChange((data) => setVendors(data));
+    return () => {
+      unsubscribe();
+      unsubVendors();
+    };
   }, []);
 
+  const vendorNameById = Object.fromEntries(vendors.map((v) => [v.id, v.name]));
+
   const handleRoleToggle = async (u) => {
+    // 管理者⇄スタッフの簡易切替（協力業者への変更は招待時のみ、複雑化を避けるため）
     const newRole = u.role === 'admin' ? 'staff' : 'admin';
     if (!window.confirm(`${u.email} を「${newRole === 'admin' ? '管理者' : 'スタッフ'}」に変更しますか？`)) return;
     try {
@@ -90,11 +105,20 @@ export default function AccountManagement({ currentUid }) {
                   <td className="px-6 py-4">
                     <span
                       className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                        u.role === 'admin' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'
+                        u.role === 'admin'
+                          ? 'bg-purple-100 text-purple-800'
+                          : u.role === 'contractor'
+                          ? 'bg-orange-100 text-orange-800'
+                          : 'bg-blue-100 text-blue-800'
                       }`}
                     >
-                      {u.role === 'admin' ? '🔐 管理者' : '👤 スタッフ'}
+                      {ROLE_LABELS[u.role] || u.role}
                     </span>
+                    {u.role === 'contractor' && u.vendorId && (
+                      <span className="block text-xs text-gray-500 mt-1">
+                        {vendorNameById[u.vendorId] || '不明な業者'}
+                      </span>
+                    )}
                   </td>
                   <td className="px-6 py-4">
                     <span
@@ -179,15 +203,31 @@ function InviteModal({ onClose, onCreated }) {
   const [email, setEmail] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [role, setRole] = useState('staff');
+  const [vendorId, setVendorId] = useState('');
+  const [vendors, setVendors] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  useEffect(() => {
+    const unsub = onVendorsChange((data) => setVendors(data.filter((v) => v.active !== false)));
+    return unsub;
+  }, []);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (role === 'contractor' && !vendorId) {
+      setError('協力業者を選択してください');
+      return;
+    }
     setLoading(true);
     setError('');
     try {
-      const result = await createStaffAccount({ email, displayName, role });
+      const result = await createStaffAccount({
+        email,
+        displayName,
+        role,
+        vendorId: role === 'contractor' ? vendorId : undefined,
+      });
       onCreated(result);
     } catch (err) {
       setError(err.message || '作成に失敗しました');
@@ -238,8 +278,32 @@ function InviteModal({ onClose, onCreated }) {
             >
               <option value="staff">スタッフ</option>
               <option value="admin">管理者</option>
+              <option value="contractor">協力業者</option>
             </select>
           </div>
+          {role === 'contractor' && (
+            <div>
+              <label className="block text-gray-700 font-semibold mb-2">所属業者 *</label>
+              <select
+                value={vendorId}
+                onChange={(e) => setVendorId(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required
+              >
+                <option value="">選択してください</option>
+                {vendors.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.name}
+                  </option>
+                ))}
+              </select>
+              {vendors.length === 0 && (
+                <p className="text-xs text-orange-600 mt-2">
+                  協力業者が未登録です。先に「協力業者管理」画面で業者を登録してください。
+                </p>
+              )}
+            </div>
+          )}
           <div className="flex gap-3 pt-4">
             <button
               type="button"

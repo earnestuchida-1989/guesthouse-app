@@ -2,22 +2,43 @@ import { useState, useEffect } from 'react';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase';
 import { onReservationsChange } from '../services/reservationService';
+import { onPropertyAssignmentsChange } from '../services/vendorService';
 import { PROPERTY_PRICES, COST_RATIO } from '../data/propertyPrices';
 import Reservations from './Reservations';
 import Schedule from './Schedule';
 import AccountManagement from './AccountManagement';
+import VendorManagement from './VendorManagement';
 
 export default function Dashboard({ user, onLogout }) {
   const [currentPage, setCurrentPage] = useState('overview');
-  const [reservations, setReservations] = useState([]);
+  const [allReservations, setAllReservations] = useState([]);
+  const [propertyAssignments, setPropertyAssignments] = useState({});
   const isAdmin = user?.role === 'admin';
+  const isContractor = user?.role === 'contractor';
 
   useEffect(() => {
     const unsubscribe = onReservationsChange((data) => {
-      setReservations(data);
+      setAllReservations(data);
     });
-    return unsubscribe;
+    const unsubAssignments = onPropertyAssignmentsChange((map) => {
+      setPropertyAssignments(map);
+    });
+    return () => {
+      unsubscribe();
+      unsubAssignments();
+    };
   }, []);
+
+  // 協力業者アカウントは、自社が担当する物件のみに絞り込む
+  const allowedProperties = isContractor
+    ? Object.entries(propertyAssignments)
+        .filter(([, vendorId]) => vendorId === user.vendorId)
+        .map(([propertyName]) => propertyName)
+    : null;
+
+  const reservations = allowedProperties
+    ? allReservations.filter((r) => allowedProperties.includes(r.propertyName || r.guestName))
+    : allReservations;
 
   const handleLogout = async () => {
     await signOut(auth);
@@ -69,7 +90,9 @@ export default function Dashboard({ user, onLogout }) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold text-gray-800">ゲストハウス日程管理</h1>
-            <p className="text-xs text-gray-500 mt-1">{isAdmin ? '🔐 管理者' : '👤 スタッフ'}</p>
+            <p className="text-xs text-gray-500 mt-1">
+              {isAdmin ? '🔐 管理者' : isContractor ? '🏢 協力業者' : '👤 スタッフ'}
+            </p>
           </div>
           <div className="flex items-center gap-4">
             <span className="text-sm text-gray-600">{user?.email || 'Guest'}</span>
@@ -126,6 +149,18 @@ export default function Dashboard({ user, onLogout }) {
                 }`}
               >
                 👥 アカウント管理
+              </button>
+            )}
+            {isAdmin && (
+              <button
+                onClick={() => setCurrentPage('vendors')}
+                className={`w-full text-left px-4 py-2 rounded-lg transition ${
+                  currentPage === 'vendors'
+                    ? 'bg-blue-500 text-white'
+                    : 'text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                🏢 協力業者管理
               </button>
             )}
           </nav>
@@ -214,11 +249,15 @@ export default function Dashboard({ user, onLogout }) {
             </div>
           )}
 
-          {currentPage === 'reservations' && <Reservations />}
+          {currentPage === 'reservations' && (
+            <Reservations allowedProperties={allowedProperties} readOnly={isContractor} />
+          )}
 
-          {currentPage === 'schedule' && <Schedule />}
+          {currentPage === 'schedule' && <Schedule allowedProperties={allowedProperties} />}
 
           {currentPage === 'accounts' && isAdmin && <AccountManagement currentUid={user?.uid} />}
+
+          {currentPage === 'vendors' && isAdmin && <VendorManagement />}
         </main>
       </div>
     </div>

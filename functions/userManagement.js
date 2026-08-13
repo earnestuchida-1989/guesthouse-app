@@ -36,12 +36,15 @@ function makeCreateStaffAccount(db) {
     }
     await assertIsAdmin(db, request.auth.uid);
 
-    const { email, displayName, role } = request.data || {};
+    const { email, displayName, role, vendorId } = request.data || {};
     if (!email || !role) {
       throw new HttpsError('invalid-argument', 'email と role は必須です');
     }
-    if (role !== 'admin' && role !== 'staff') {
-      throw new HttpsError('invalid-argument', 'role は admin または staff を指定してください');
+    if (role !== 'admin' && role !== 'staff' && role !== 'contractor') {
+      throw new HttpsError('invalid-argument', 'role は admin, staff, contractor のいずれかを指定してください');
+    }
+    if (role === 'contractor' && !vendorId) {
+      throw new HttpsError('invalid-argument', 'contractorロールにはvendorIdが必須です');
     }
 
     const tempPassword = generateTempPassword();
@@ -62,6 +65,7 @@ function makeCreateStaffAccount(db) {
       email,
       displayName: displayName || email,
       role,
+      vendorId: role === 'contractor' ? vendorId : null,
       active: true,
       createdAt: new Date().toISOString(),
       createdBy: request.auth.uid,
@@ -81,12 +85,18 @@ function makeSetUserRole(db) {
     }
     await assertIsAdmin(db, request.auth.uid);
 
-    const { uid, role } = request.data || {};
-    if (!uid || (role !== 'admin' && role !== 'staff')) {
-      throw new HttpsError('invalid-argument', 'uid と role(admin|staff) は必須です');
+    const { uid, role, vendorId } = request.data || {};
+    if (!uid || (role !== 'admin' && role !== 'staff' && role !== 'contractor')) {
+      throw new HttpsError('invalid-argument', 'uid と role(admin|staff|contractor) は必須です');
+    }
+    if (role === 'contractor' && !vendorId) {
+      throw new HttpsError('invalid-argument', 'contractorロールにはvendorIdが必須です');
     }
 
-    await db.collection('users').doc(uid).update({ role });
+    await db.collection('users').doc(uid).update({
+      role,
+      vendorId: role === 'contractor' ? vendorId : null,
+    });
     return { ok: true };
   });
 }

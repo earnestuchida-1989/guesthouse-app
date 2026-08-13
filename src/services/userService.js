@@ -19,10 +19,10 @@ export const getUserDoc = async (uid) => {
   return snap.exists() ? snap.data() : null;
 };
 
-// 新規スタッフ/管理者アカウントを作成（管理者専用、Cloud Function経由）
-export const createStaffAccount = async ({ email, displayName, role }) => {
+// 新規スタッフ/管理者/協力業者アカウントを作成（管理者専用、Cloud Function経由）
+export const createStaffAccount = async ({ email, displayName, role, vendorId }) => {
   const fn = httpsCallable(functions, 'createStaffAccount');
-  const res = await fn({ email, displayName, role });
+  const res = await fn({ email, displayName, role, vendorId });
   return res.data; // { uid, email, tempPassword }
 };
 

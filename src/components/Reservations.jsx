@@ -3,7 +3,7 @@ import { onReservationsChange, deleteReservation } from '../services/reservation
 import AddReservationModal from './AddReservationModal';
 import EditReservationModal from './EditReservationModal';
 
-export default function Reservations() {
+export default function Reservations({ allowedProperties = null, readOnly = false }) {
   const [reservations, setReservations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -13,12 +13,15 @@ export default function Reservations() {
   useEffect(() => {
     setLoading(true);
     const unsubscribe = onReservationsChange((data) => {
-      setReservations(data);
+      const filtered = allowedProperties
+        ? data.filter((r) => allowedProperties.includes(r.propertyName || r.guestName))
+        : data;
+      setReservations(filtered);
       setLoading(false);
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [allowedProperties]);
 
   const handleEdit = (reservation) => {
     setSelectedReservation(reservation);
@@ -58,12 +61,14 @@ export default function Reservations() {
         <div>
           <h1 className="text-3xl font-bold text-gray-800">清掃スケジュール管理</h1>
         </div>
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-6 rounded-lg transition"
-        >
-          + 新規予定追加
-        </button>
+        {!readOnly && (
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-6 rounded-lg transition"
+          >
+            + 新規予定追加
+          </button>
+        )}
       </div>
 
       {loading ? (
@@ -81,7 +86,9 @@ export default function Reservations() {
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">人数</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">備考</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">ステータス</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">操作</th>
+                {!readOnly && (
+                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">操作</th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -125,20 +132,22 @@ export default function Reservations() {
                         : '待機中'}
                     </span>
                   </td>
-                  <td className="px-6 py-4 space-x-2">
-                    <button
-                      onClick={() => handleEdit(res)}
-                      className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-1 px-3 rounded text-sm transition"
-                    >
-                      編集
-                    </button>
-                    <button
-                      onClick={() => handleDelete(res.id)}
-                      className="bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-3 rounded text-sm transition"
-                    >
-                      削除
-                    </button>
-                  </td>
+                  {!readOnly && (
+                    <td className="px-6 py-4 space-x-2">
+                      <button
+                        onClick={() => handleEdit(res)}
+                        className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-1 px-3 rounded text-sm transition"
+                      >
+                        編集
+                      </button>
+                      <button
+                        onClick={() => handleDelete(res.id)}
+                        className="bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-3 rounded text-sm transition"
+                      >
+                        削除
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

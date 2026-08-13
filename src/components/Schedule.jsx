@@ -5,7 +5,7 @@ function toDateStr(y, m, d) {
   return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 }
 
-export default function Schedule() {
+export default function Schedule({ allowedProperties = null }) {
   const [currentMonth, setCurrentMonth] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth());
@@ -16,11 +16,14 @@ export default function Schedule() {
 
   useEffect(() => {
     const unsubscribe = onReservationsChange((data) => {
-      setReservations(data);
+      const filtered = allowedProperties
+        ? data.filter((r) => allowedProperties.includes(r.propertyName || r.guestName))
+        : data;
+      setReservations(filtered);
       setLoading(false);
     });
     return unsubscribe;
-  }, []);
+  }, [allowedProperties]);
 
   const daysInMonth = (date) => new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
   const firstDayOfMonth = (date) => new Date(date.getFullYear(), date.getMonth(), 1).getDay();

@@ -23,5 +23,22 @@ service cloud.firestore {
     match /lineConfigs/{docId} {
       allow read, write: if true;
     }
+
+    // 協力業者マスタ・物件担当割り当て: 読み取りはログイン済みなら誰でも可
+    // （協力業者アカウントが自分の担当物件を判定するために必要）。
+    // 書き込みは管理者のみ（usersコレクションのroleを参照して判定）。
+    function isAdmin() {
+      return request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    match /vendors/{vendorId} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
+    }
+    match /propertyAssignments/{propertyId} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
+    }
   }
 }
