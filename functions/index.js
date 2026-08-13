@@ -13,6 +13,7 @@ const {
   makeSetUserActive,
   makeResetUserPassword,
 } = require('./userManagement');
+const { makeGetMyCustomerReports } = require('./customerReports');
 
 initializeApp();
 const db = getFirestore();
@@ -21,6 +22,7 @@ exports.createStaffAccount = makeCreateStaffAccount(db);
 exports.setUserRole = makeSetUserRole(db);
 exports.setUserActive = makeSetUserActive(db);
 exports.resetUserPassword = makeResetUserPassword(db);
+exports.getMyCustomerReports = makeGetMyCustomerReports(db);
 
 const GOOGLE_SERVICE_ACCOUNT_KEY = defineSecret('GOOGLE_SERVICE_ACCOUNT_KEY');
 const SYNC_SECRET = defineSecret('SYNC_SECRET');

@@ -12,11 +12,15 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // 予約・清掃報告: ログイン必須（未ログインの第三者がFirestore APIへ直接アクセスするのを防ぐ）。
+    // ロールごとの細かい書き込み制限（例:顧客は自分のフィードバック欄しか書けない）は
+    // 未実装。現状は「ログインしていれば読み書き可」という粒度に留まる。
+    match /reservations/{docId} {
+      allow read, write: if request.auth != null;
+    }
+
     // その他のコレクションは開発フェーズのため引き続きオープン。
     // 今後の課題として認証必須化を検討。
-    match /reservations/{docId} {
-      allow read, write: if true;
-    }
     match /sheetConfigs/{docId} {
       allow read, write: if true;
     }
@@ -47,9 +51,12 @@ service cloud.firestore {
       allow read: if request.auth != null;
       allow write: if isAdmin();
     }
+    // 物件マスタ: 住所・清掃単価・マネージャー連絡先など機微な情報を含むため、
+    // 管理者以外（スタッフ・協力業者・顧客アカウント含む）は読み書きともに不可。
+    // 顧客ポータル（清掃報告閲覧）は物件マスタを直接読まず、Cloud Function経由で
+    // 必要最小限のデータのみ取得する（functions/customerReports.js）。
     match /properties/{propertyName} {
-      allow read: if request.auth != null;
-      allow write: if isAdmin();
+      allow read, write: if isAdmin();
     }
     match /employees/{employeeId} {
       allow read: if request.auth != null;

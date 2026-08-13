@@ -8,6 +8,9 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      // 自前でvirtual:pwa-registerを呼び、更新検知時に確実にリロードさせる（main.jsx参照）。
+      // デフォルトの自動注入だとタブを開きっぱなしのユーザーに新デプロイが反映されないことがあるため。
+      injectRegister: false,
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
         name: 'ゲストハウス日程管理',

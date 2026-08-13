@@ -27,15 +27,17 @@ export default function Dashboard({ user, onLogout }) {
     const unsubAssignments = onPropertyAssignmentsChange((map) => {
       setPropertyAssignments(map);
     });
-    const unsubProperties = onPropertiesChange((map) => {
-      setPropertyMaster(map);
-    });
+    // 物件マスタ（properties）はFirestoreルール上、管理者のみ読み取り可能。
+    // 管理者以外が購読すると permission-denied になるだけなので、管理者の時だけ購読する。
+    const unsubProperties = isAdmin
+      ? onPropertiesChange((map) => setPropertyMaster(map))
+      : null;
     return () => {
       unsubscribe();
       unsubAssignments();
-      unsubProperties();
+      if (unsubProperties) unsubProperties();
     };
-  }, []);
+  }, [isAdmin]);
 
   // 料金はFirestoreの物件マスタ（properties）を優先し、未登録の物件は
   // 従来の静的データ（src/data/propertyPrices.js）にフォールバックする

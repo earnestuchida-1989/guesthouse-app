@@ -1,45 +1,40 @@
-import { useState, useEffect } from 'react';
-import { onReservationsChange, updateReservation } from '../services/reservationService';
-import { onPropertiesChange } from '../services/propertyService';
+import { useState, useEffect, useCallback } from 'react';
+import { updateReservation } from '../services/reservationService';
 import { uploadReservationPhotos } from '../services/storageService';
+import { getMyCustomerReports } from '../services/customerReportsService';
 
 export default function CustomerReports({ user }) {
-  const [reservations, setReservations] = useState([]);
-  const [propertyMaster, setPropertyMaster] = useState({});
+  const [myReports, setMyReports] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [feedbackDrafts, setFeedbackDrafts] = useState({});
   const [feedbackFiles, setFeedbackFiles] = useState({});
   const [feedbackPreviews, setFeedbackPreviews] = useState({});
   const [feedbackProgress, setFeedbackProgress] = useState({});
   const [savingId, setSavingId] = useState(null);
 
-  useEffect(() => {
-    const unsubReservations = onReservationsChange((data) => {
-      setReservations(data);
+  // 物件マスタは管理者専用のため、顧客ポータルはCloud Function経由で
+  // 自分の物件の完了報告だけを取得する（直接Firestoreは読まない）
+  const loadReports = useCallback(async () => {
+    try {
+      const reports = await getMyCustomerReports();
+      reports.sort((a, b) => {
+        const dateA = a.cleaningDate || '';
+        const dateB = b.cleaningDate || '';
+        return dateB.localeCompare(dateA); // 新しい順
+      });
+      setMyReports(reports);
+      setLoadError('');
+    } catch (err) {
+      setLoadError('清掃報告の取得に失敗しました: ' + err.message);
+    } finally {
       setLoading(false);
-    });
-    const unsubProperties = onPropertiesChange((map) => {
-      setPropertyMaster(map);
-    });
-    return () => {
-      unsubReservations();
-      unsubProperties();
-    };
+    }
   }, []);
 
-  // 自社の物件マスタで customerId が一致する物件名のみに絞り込む
-  const myPropertyNames = Object.entries(propertyMaster)
-    .filter(([, data]) => data.customerId === user?.customerId)
-    .map(([name]) => name);
-
-  // スタッフが完了報告した予定のみを対象にする
-  const myReports = reservations
-    .filter((r) => r.completed && myPropertyNames.includes(r.propertyName || r.guestName))
-    .sort((a, b) => {
-      const dateA = a.cleaningDate || a.checkOut || '';
-      const dateB = b.cleaningDate || b.checkOut || '';
-      return dateB.localeCompare(dateA); // 新しい順
-    });
+  useEffect(() => {
+    loadReports();
+  }, [loadReports]);
 
   const handleFeedbackChange = (id, value) => {
     setFeedbackDrafts((prev) => ({ ...prev, [id]: value }));
@@ -75,6 +70,7 @@ export default function CustomerReports({ user }) {
       setFeedbackDrafts((prev) => ({ ...prev, [res.id]: '' }));
       setFeedbackFiles((prev) => ({ ...prev, [res.id]: [] }));
       setFeedbackPreviews((prev) => ({ ...prev, [res.id]: [] }));
+      await loadReports();
     } catch (err) {
       alert('フィードバックの送信に失敗しました: ' + err.message);
     } finally {
@@ -94,6 +90,10 @@ export default function CustomerReports({ user }) {
   return (
     <div className="space-y-6">
       <h1 className="text-3xl font-bold text-gray-800">📷 清掃報告</h1>
+
+      {loadError && (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">{loadError}</div>
+      )}
 
       {myReports.length === 0 ? (
         <div className="bg-white rounded-lg shadow p-8 text-center text-gray-500">
