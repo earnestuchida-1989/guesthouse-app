@@ -7,16 +7,19 @@ import {
   resetUserPassword,
 } from '../services/userService';
 import { onVendorsChange } from '../services/vendorService';
+import { onCustomersChange, addCustomer } from '../services/customerService';
 
 const ROLE_LABELS = {
   admin: '🔐 管理者',
   staff: '👤 スタッフ',
   contractor: '🏢 協力業者',
+  customer: '🧑‍💼 顧客',
 };
 
 export default function AccountManagement({ currentUid }) {
   const [users, setUsers] = useState([]);
   const [vendors, setVendors] = useState([]);
+  const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [newAccountResult, setNewAccountResult] = useState(null);
@@ -28,13 +31,16 @@ export default function AccountManagement({ currentUid }) {
       setLoading(false);
     });
     const unsubVendors = onVendorsChange((data) => setVendors(data));
+    const unsubCustomers = onCustomersChange((data) => setCustomers(data));
     return () => {
       unsubscribe();
       unsubVendors();
+      unsubCustomers();
     };
   }, []);
 
   const vendorNameById = Object.fromEntries(vendors.map((v) => [v.id, v.name]));
+  const customerNameById = Object.fromEntries(customers.map((c) => [c.id, c.name]));
 
   const handleRoleToggle = async (u) => {
     // 管理者⇄スタッフの簡易切替（協力業者への変更は招待時のみ、複雑化を避けるため）
@@ -109,6 +115,8 @@ export default function AccountManagement({ currentUid }) {
                           ? 'bg-purple-100 text-purple-800'
                           : u.role === 'contractor'
                           ? 'bg-orange-100 text-orange-800'
+                          : u.role === 'customer'
+                          ? 'bg-teal-100 text-teal-800'
                           : 'bg-blue-100 text-blue-800'
                       }`}
                     >
@@ -117,6 +125,11 @@ export default function AccountManagement({ currentUid }) {
                     {u.role === 'contractor' && u.vendorId && (
                       <span className="block text-xs text-gray-500 mt-1">
                         {vendorNameById[u.vendorId] || '不明な業者'}
+                      </span>
+                    )}
+                    {u.role === 'customer' && u.customerId && (
+                      <span className="block text-xs text-gray-500 mt-1">
+                        {customerNameById[u.customerId] || '不明な顧客'}
                       </span>
                     )}
                   </td>
@@ -205,18 +218,44 @@ function InviteModal({ onClose, onCreated }) {
   const [role, setRole] = useState('staff');
   const [vendorId, setVendorId] = useState('');
   const [vendors, setVendors] = useState([]);
+  const [customerId, setCustomerId] = useState('');
+  const [customers, setCustomers] = useState([]);
+  const [newCustomerName, setNewCustomerName] = useState('');
+  const [addingCustomer, setAddingCustomer] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
     const unsub = onVendorsChange((data) => setVendors(data.filter((v) => v.active !== false)));
-    return unsub;
+    const unsubCustomers = onCustomersChange((data) => setCustomers(data.filter((c) => c.active !== false)));
+    return () => {
+      unsub();
+      unsubCustomers();
+    };
   }, []);
+
+  const handleAddCustomer = async () => {
+    if (!newCustomerName.trim()) return;
+    setAddingCustomer(true);
+    try {
+      const id = await addCustomer(newCustomerName.trim());
+      setCustomerId(id);
+      setNewCustomerName('');
+    } catch (err) {
+      setError('顧客の追加に失敗しました: ' + err.message);
+    } finally {
+      setAddingCustomer(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (role === 'contractor' && !vendorId) {
       setError('協力業者を選択してください');
+      return;
+    }
+    if (role === 'customer' && !customerId) {
+      setError('顧客を選択してください');
       return;
     }
     setLoading(true);
@@ -227,6 +266,7 @@ function InviteModal({ onClose, onCreated }) {
         displayName,
         role,
         vendorId: role === 'contractor' ? vendorId : undefined,
+        customerId: role === 'customer' ? customerId : undefined,
       });
       onCreated(result);
     } catch (err) {
@@ -279,8 +319,44 @@ function InviteModal({ onClose, onCreated }) {
               <option value="staff">スタッフ</option>
               <option value="admin">管理者</option>
               <option value="contractor">協力業者</option>
+              <option value="customer">顧客</option>
             </select>
           </div>
+          {role === 'customer' && (
+            <div>
+              <label className="block text-gray-700 font-semibold mb-2">顧客 *</label>
+              <select
+                value={customerId}
+                onChange={(e) => setCustomerId(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required
+              >
+                <option value="">選択してください</option>
+                {customers.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+              <div className="flex gap-2 mt-2">
+                <input
+                  type="text"
+                  value={newCustomerName}
+                  onChange={(e) => setNewCustomerName(e.target.value)}
+                  placeholder="新しい顧客名を入力して追加"
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddCustomer}
+                  disabled={addingCustomer || !newCustomerName.trim()}
+                  className="bg-teal-500 hover:bg-teal-600 disabled:bg-gray-300 text-white font-bold py-2 px-3 rounded-lg text-sm transition"
+                >
+                  {addingCustomer ? '追加中...' : '+ 追加'}
+                </button>
+              </div>
+            </div>
+          )}
           {role === 'contractor' && (
             <div>
               <label className="block text-gray-700 font-semibold mb-2">所属業者 *</label>

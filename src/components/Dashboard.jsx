@@ -9,6 +9,7 @@ import Reservations from './Reservations';
 import Schedule from './Schedule';
 import AccountManagement from './AccountManagement';
 import VendorManagement from './VendorManagement';
+import CustomerReports from './CustomerReports';
 
 export default function Dashboard({ user, onLogout }) {
   const [currentPage, setCurrentPage] = useState('overview');
@@ -17,6 +18,7 @@ export default function Dashboard({ user, onLogout }) {
   const [propertyMaster, setPropertyMaster] = useState({});
   const isAdmin = user?.role === 'admin';
   const isContractor = user?.role === 'contractor';
+  const isCustomer = user?.role === 'customer';
 
   useEffect(() => {
     const unsubscribe = onReservationsChange((data) => {
@@ -60,6 +62,34 @@ export default function Dashboard({ user, onLogout }) {
     await signOut(auth);
     onLogout();
   };
+
+  // 顧客アカウントは専用の簡易レイアウト（清掃報告の閲覧・フィードバックのみ）を表示する
+  if (isCustomer) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <nav className="bg-white shadow-md">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-800">ゲストハウス清掃報告</h1>
+              <p className="text-xs text-gray-500 mt-1">🧑‍💼 顧客</p>
+            </div>
+            <div className="flex items-center gap-4">
+              <span className="text-sm text-gray-600">{user?.email || 'Guest'}</span>
+              <button
+                onClick={handleLogout}
+                className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition"
+              >
+                ログアウト
+              </button>
+            </div>
+          </div>
+        </nav>
+        <main className="max-w-4xl mx-auto p-6">
+          <CustomerReports user={user} />
+        </main>
+      </div>
+    );
+  }
 
   const calculateMonthlyStats = () => {
     const now = new Date();
@@ -266,7 +296,11 @@ export default function Dashboard({ user, onLogout }) {
           )}
 
           {currentPage === 'reservations' && (
-            <Reservations allowedProperties={allowedProperties} readOnly={isContractor} />
+            <Reservations
+              allowedProperties={allowedProperties}
+              readOnly={isContractor}
+              currentUser={user}
+            />
           )}
 
           {currentPage === 'schedule' && <Schedule allowedProperties={allowedProperties} />}

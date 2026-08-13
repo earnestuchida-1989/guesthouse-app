@@ -35,6 +35,7 @@ export default function App() {
           ...currentUser,
           role: userDoc?.role || 'staff',
           vendorId: userDoc?.vendorId || null,
+          customerId: userDoc?.customerId || null,
         });
       } catch (e) {
         console.error('ユーザー情報取得エラー:', e);

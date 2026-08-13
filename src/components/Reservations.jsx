@@ -2,12 +2,14 @@ import { useState, useEffect } from 'react';
 import { onReservationsChange, deleteReservation } from '../services/reservationService';
 import AddReservationModal from './AddReservationModal';
 import EditReservationModal from './EditReservationModal';
+import CompletionReportModal from './CompletionReportModal';
 
-export default function Reservations({ allowedProperties = null, readOnly = false }) {
+export default function Reservations({ allowedProperties = null, readOnly = false, canReport = true, currentUser = null }) {
   const [reservations, setReservations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
   const [selectedReservation, setSelectedReservation] = useState(null);
 
   useEffect(() => {
@@ -26,6 +28,11 @@ export default function Reservations({ allowedProperties = null, readOnly = fals
   const handleEdit = (reservation) => {
     setSelectedReservation(reservation);
     setShowEditModal(true);
+  };
+
+  const handleReport = (reservation) => {
+    setSelectedReservation(reservation);
+    setShowReportModal(true);
   };
 
   const handleDelete = async (id) => {
@@ -86,6 +93,7 @@ export default function Reservations({ allowedProperties = null, readOnly = fals
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">人数</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">備考</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">ステータス</th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">完了報告</th>
                 {!readOnly && (
                   <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">操作</th>
                 )}
@@ -132,6 +140,23 @@ export default function Reservations({ allowedProperties = null, readOnly = fals
                         : '待機中'}
                     </span>
                   </td>
+                  <td className="px-6 py-4">
+                    {res.completed ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800">
+                        ✅ 完了{res.photoUrls?.length ? `（写真${res.photoUrls.length}枚）` : ''}
+                      </span>
+                    ) : (
+                      <span className="text-gray-300 text-xs">未報告</span>
+                    )}
+                    {canReport && (
+                      <button
+                        onClick={() => handleReport(res)}
+                        className="block mt-1 text-xs bg-green-500 hover:bg-green-600 text-white font-bold py-1 px-2 rounded transition"
+                      >
+                        📷 {res.completed ? '報告を編集' : '完了報告する'}
+                      </button>
+                    )}
+                  </td>
                   {!readOnly && (
                     <td className="px-6 py-4 space-x-2">
                       <button
@@ -176,6 +201,18 @@ export default function Reservations({ allowedProperties = null, readOnly = fals
             setSelectedReservation(null);
           }}
           onReservationUpdated={handleReservationUpdated}
+        />
+      )}
+
+      {showReportModal && selectedReservation && (
+        <CompletionReportModal
+          reservation={selectedReservation}
+          currentUser={currentUser}
+          onClose={() => {
+            setShowReportModal(false);
+            setSelectedReservation(null);
+          }}
+          onCompleted={() => {}}
         />
       )}
     </div>
