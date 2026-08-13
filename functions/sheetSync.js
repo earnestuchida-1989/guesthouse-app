@@ -250,9 +250,25 @@ function buildGridReservationsForConfig(rows, config) {
       const runStart = col;
       let runEnd = col;
       let lastRaw = raw;
-      while (runEnd + 1 < row.values.length && (row.values[runEnd + 1] || '').trim()) {
-        runEnd++;
-        lastRaw = (row.values[runEnd] || '').trim();
+
+      const mergeEnd = row.mergeEndByCol ? row.mergeEndByCol[col] : undefined;
+      if (mergeEnd !== undefined && mergeEnd > col) {
+        // Excelの横結合セル: 値は先頭列にしか入らず、結合範囲の残りの列は空文字で読めてしまう。
+        // 「その日が空欄=空室」と誤判定しないよう、結合範囲の最終列を実際のチェックアウト日とする。
+        runEnd = mergeEnd;
+      } else {
+        // 結合セルでない場合は、従来通り同じ値が連続して記入されているケース
+        // （1マス=1日、同一の人数が複数日にわたって続けて入力される形式）に対応する。
+        // ただし次のセルが別の結合セルの開始列である場合は、そちらは独立した別の宿泊なので
+        // 取り込んでしまわないよう、ここで止める。
+        while (
+          runEnd + 1 < row.values.length &&
+          (row.values[runEnd + 1] || '').trim() &&
+          (!row.mergeEndByCol || row.mergeEndByCol[runEnd + 1] === undefined)
+        ) {
+          runEnd++;
+          lastRaw = (row.values[runEnd] || '').trim();
+        }
       }
 
       const persons = parseInt(lastRaw, 10);

@@ -41,11 +41,23 @@ async function fetchExcelRows(drive, fileId, sheetName) {
     raw: false, // 日付・数値も文字列として取得し、既存のnormalizeDate/normalizeTimeと挙動を揃える
   });
 
+  // 横方向（同じ行内）の結合セル情報を行ごとにまとめる。
+  // 結合セルは値が先頭列にしか入らず、残りの列は空文字として読めてしまうため、
+  // グリッド解析側（buildGridReservationsForConfig）で「本当のチェックアウト日は
+  // 結合範囲の最終列」と正しく判定できるように、開始列→終了列のマップを渡す。
+  const mergeEndByColByRow = {};
+  (worksheet['!merges'] || []).forEach((m) => {
+    if (m.s.r !== m.e.r) return; // 縦方向の結合は対象外（日付は横方向のため）
+    if (!mergeEndByColByRow[m.s.r]) mergeEndByColByRow[m.s.r] = {};
+    mergeEndByColByRow[m.s.r][m.s.c] = m.e.c;
+  });
+
   return rows2d.map((values, i) => ({
     rowIndex: i + 1,
     values: values.map((v) => (v === null || v === undefined ? '' : String(v))),
     strikethrough: values.map(() => false),
     redText: values.map(() => false),
+    mergeEndByCol: mergeEndByColByRow[i] || {},
   }));
 }
 
