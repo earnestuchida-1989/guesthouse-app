@@ -40,5 +40,20 @@ service cloud.firestore {
       allow read: if request.auth != null;
       allow write: if isAdmin();
     }
+
+    // マスタデータ（顧客・物件・従業員）: 読み取りはログイン済みなら誰でも可。
+    // 書き込みは管理者のみ（物件マスタ取り込みスクリプトはAdmin SDK経由なのでルール対象外）。
+    match /customers/{customerId} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
+    }
+    match /properties/{propertyName} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
+    }
+    match /employees/{employeeId} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
+    }
   }
 }

@@ -3,6 +3,7 @@ import { signOut } from 'firebase/auth';
 import { auth } from '../firebase';
 import { onReservationsChange } from '../services/reservationService';
 import { onPropertyAssignmentsChange } from '../services/vendorService';
+import { onPropertiesChange } from '../services/propertyService';
 import { PROPERTY_PRICES, COST_RATIO } from '../data/propertyPrices';
 import Reservations from './Reservations';
 import Schedule from './Schedule';
@@ -13,6 +14,7 @@ export default function Dashboard({ user, onLogout }) {
   const [currentPage, setCurrentPage] = useState('overview');
   const [allReservations, setAllReservations] = useState([]);
   const [propertyAssignments, setPropertyAssignments] = useState({});
+  const [propertyMaster, setPropertyMaster] = useState({});
   const isAdmin = user?.role === 'admin';
   const isContractor = user?.role === 'contractor';
 
@@ -23,11 +25,25 @@ export default function Dashboard({ user, onLogout }) {
     const unsubAssignments = onPropertyAssignmentsChange((map) => {
       setPropertyAssignments(map);
     });
+    const unsubProperties = onPropertiesChange((map) => {
+      setPropertyMaster(map);
+    });
     return () => {
       unsubscribe();
       unsubAssignments();
+      unsubProperties();
     };
   }, []);
+
+  // 料金はFirestoreの物件マスタ（properties）を優先し、未登録の物件は
+  // 従来の静的データ（src/data/propertyPrices.js）にフォールバックする
+  const getPropertyPrice = (propertyName) => {
+    const master = propertyMaster[propertyName];
+    if (master && typeof master.cleaningPrice === 'number') {
+      return master.cleaningPrice;
+    }
+    return PROPERTY_PRICES[propertyName] || 5000;
+  };
 
   // 協力業者アカウントは、自社が担当する物件のみに絞り込む
   const allowedProperties = isContractor
@@ -58,7 +74,7 @@ export default function Dashboard({ user, onLogout }) {
       try {
         const resDate = new Date(res.cleaningDate || res.checkOut);
         if (resDate.getMonth() === currentMonth && resDate.getFullYear() === currentYear && res.status === 'confirmed') {
-          const price = PROPERTY_PRICES[res.propertyName || res.guestName] || 5000;
+          const price = getPropertyPrice(res.propertyName || res.guestName);
           totalRevenue += price;
           totalCost += price * COST_RATIO;
           completedCount += 1;
