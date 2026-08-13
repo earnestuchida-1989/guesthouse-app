@@ -34,6 +34,7 @@ exports.scheduledSheetSync = onSchedule(
     timeZone: 'Asia/Tokyo',
     secrets: [GOOGLE_SERVICE_ACCOUNT_KEY],
     region: 'asia-northeast1',
+    timeoutSeconds: 300,
   },
   async () => {
     logger.info('scheduledSheetSync: start');
@@ -48,6 +49,7 @@ exports.manualSheetSync = onRequest(
   {
     secrets: [GOOGLE_SERVICE_ACCOUNT_KEY, SYNC_SECRET],
     region: 'asia-northeast1',
+    timeoutSeconds: 300,
   },
   async (req, res) => {
     const provided = req.query.secret;

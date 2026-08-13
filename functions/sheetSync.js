@@ -123,8 +123,10 @@ function buildGridReservationsForConfig(rows, config) {
   }
 
   const roomMap = config.mode === 'multi' ? config.roomPropertyMap || {} : null;
-  const reservations = [];
 
+  // ステップ1: 連続する記入セルを1つの宿泊としてまとめる
+  // （開始日=チェックイン、最終日=チェックアウト/清掃日。値は最終日のものを人数として採用）
+  const stays = [];
   for (const row of rows) {
     if (row.rowIndex < dataStart || row.rowIndex > dataEnd) continue;
     const label = (row.values[0] || '').trim();
@@ -138,33 +140,79 @@ function buildGridReservationsForConfig(rows, config) {
       propertyName = config.propertyName;
     }
 
-    for (let col = 1; col < row.values.length; col++) {
+    let col = 1;
+    while (col < row.values.length) {
       const raw = (row.values[col] || '').trim();
-      if (!raw) continue;
-      const persons = parseInt(raw, 10);
-      if (isNaN(persons)) continue;
-      const cleaningDate = dateByCol[col];
-      if (!cleaningDate || cleaningDate < cutoffDate) continue;
+      if (!raw) {
+        col++;
+        continue;
+      }
+      const runStart = col;
+      let runEnd = col;
+      let lastRaw = raw;
+      while (runEnd + 1 < row.values.length && (row.values[runEnd + 1] || '').trim()) {
+        runEnd++;
+        lastRaw = (row.values[runEnd] || '').trim();
+      }
 
-      reservations.push({
-        docId: `sheet_${sanitizeForId(config.sheetId)}_${sanitizeForId(config.tabName)}_r${row.rowIndex}c${col}`,
-        data: {
+      const persons = parseInt(lastRaw, 10);
+      const cleaningDate = dateByCol[runEnd];
+      // 1日だけのマークは「チェックアウト/清掃日」のみが分かり、実際のチェックイン日は不明。
+      // runStart===runEndの場合にチェックイン日=清掃日としてしまうと、常に自分自身と一致して
+      // hasCheckInが誤ってtrueになるため、複数日にまたがる記入がある場合のみ設定する。
+      const checkInDate = runStart !== runEnd ? dateByCol[runStart] : null;
+
+      if (!isNaN(persons) && cleaningDate) {
+        stays.push({
+          rowIndex: row.rowIndex,
+          runStart,
+          runEnd,
           propertyName,
           cleaningDate,
-          checkInDate: null,
+          checkInDate,
           persons,
+        });
+      }
+
+      col = runEnd + 1;
+    }
+  }
+
+  // ステップ2: 物件ごとに「あるステイの清掃日 == 別ステイのチェックイン日」ならhasCheckIn=true
+  const checkInDatesByProperty = {};
+  for (const stay of stays) {
+    if (!stay.checkInDate) continue;
+    if (!checkInDatesByProperty[stay.propertyName]) {
+      checkInDatesByProperty[stay.propertyName] = new Set();
+    }
+    checkInDatesByProperty[stay.propertyName].add(stay.checkInDate);
+  }
+
+  const reservations = stays
+    .filter((stay) => stay.cleaningDate >= cutoffDate)
+    .map((stay) => {
+      const hasCheckIn =
+        !!checkInDatesByProperty[stay.propertyName] &&
+        checkInDatesByProperty[stay.propertyName].has(stay.cleaningDate);
+
+      return {
+        docId: `sheet_${sanitizeForId(config.sheetId)}_${sanitizeForId(config.tabName)}_r${stay.rowIndex}c${stay.runStart}-${stay.runEnd}`,
+        data: {
+          propertyName: stay.propertyName,
+          cleaningDate: stay.cleaningDate,
+          checkInDate: stay.checkInDate || null,
+          persons: stay.persons,
           notes: '',
           status: 'confirmed',
-          hasCheckIn: false,
+          hasCheckIn,
           checkInTime: '',
           source: 'sheet',
           sheetId: config.sheetId,
           sheetConfigId: config.id,
-          sourceRow: row.rowIndex,
+          sourceRow: stay.rowIndex,
         },
-      });
-    }
-  }
+      };
+    });
 
   return reservations;
 }
