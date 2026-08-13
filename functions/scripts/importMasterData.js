@@ -105,11 +105,14 @@ function toActive(v) {
 async function importCustomers(token, workbook) {
   const { headers, rows } = sheetToRows(workbook, '顧客マスタ');
   let count = 0;
+  const customerNameById = {};
   for (const row of rows) {
     const id = col(headers, row, '顧客ID');
     if (!id) continue;
+    const name = col(headers, row, '顧客名（会社名）');
+    customerNameById[id] = name || id;
     await firestoreSet(token, 'customers', id, buildFields({
-      name: col(headers, row, '顧客名（会社名）'),
+      name,
       type: col(headers, row, '顧客タイプ'),
       contactName: col(headers, row, '担当者名'),
       phone: col(headers, row, '電話番号'),
@@ -126,10 +129,10 @@ async function importCustomers(token, workbook) {
     }));
     count++;
   }
-  return count;
+  return { count, customerNameById };
 }
 
-async function importProperties(token, workbook) {
+async function importProperties(token, workbook, customerNameById) {
   const { headers, rows } = sheetToRows(workbook, '物件マスタ');
   let count = 0;
   let sheetConfigCount = 0;
@@ -143,10 +146,11 @@ async function importProperties(token, workbook) {
 
     const priceRaw = col(headers, row, '清掃単価（円）');
     const cleaningPrice = priceRaw !== '' ? parseInt(priceRaw, 10) : null;
+    const customerId = col(headers, row, '顧客ID');
 
     await firestoreSet(token, 'properties', propertyName, buildFields({
       propertyId,
-      customerId: col(headers, row, '顧客ID'),
+      customerId,
       address: col(headers, row, '住所'),
       prefecture: col(headers, row, '都道府県'),
       city: col(headers, row, '市区町村'),
@@ -164,6 +168,14 @@ async function importProperties(token, workbook) {
       updatedAt: new Date().toISOString(),
     }));
     count++;
+
+    // 物件ディレクトリ（物件名→顧客名の軽量コピー）も同時に更新。
+    // properties自体は管理者専用のため、スタッフ・協力業者が「同名の物件」を区別するのに使う。
+    await firestoreSet(token, 'propertyDirectory', propertyName, buildFields({
+      customerId: customerId || '',
+      customerName: customerId ? (customerNameById[customerId] || customerId) : '',
+      updatedAt: new Date().toISOString(),
+    }));
 
     // Google Sheets連携情報が入っていれば、未登録の場合のみ sheetConfigs を自動作成
     const gsId = col(headers, row, 'Google Sheets ID');
@@ -285,12 +297,12 @@ async function main() {
   const workbook = XLSX.readFile(filePath);
 
   console.log('=== 顧客マスタ 取り込み中 ===');
-  const customerCount = await importCustomers(token, workbook);
+  const { count: customerCount, customerNameById } = await importCustomers(token, workbook);
   console.log(`✓ ${customerCount}件`);
 
   console.log('=== 物件マスタ 取り込み中 ===');
-  const { count: propertyCount, sheetConfigCount, propertyIdToName } = await importProperties(token, workbook);
-  console.log(`✓ ${propertyCount}件（うちsheetConfigs自動作成: ${sheetConfigCount}件）`);
+  const { count: propertyCount, sheetConfigCount, propertyIdToName } = await importProperties(token, workbook, customerNameById);
+  console.log(`✓ ${propertyCount}件（うちsheetConfigs自動作成: ${sheetConfigCount}件、propertyDirectoryも同時更新）`);
 
   console.log('=== 従業員マスタ 取り込み中 ===');
   const employeeCount = await importEmployees(token, workbook);

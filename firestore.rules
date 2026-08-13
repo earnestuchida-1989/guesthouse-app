@@ -58,6 +58,14 @@ service cloud.firestore {
     match /properties/{propertyName} {
       allow read, write: if isAdmin();
     }
+    // 物件ディレクトリ: 物件マスタから「物件名→顧客名」だけを抜き出した、機微情報を含まない軽量コピー。
+    // 清掃管理画面で「桜」「櫻」のような同名・紛らわしい物件名を顧客名付きで区別できるよう、
+    // スタッフ・協力業者も含めて読み取り可能にする（住所・単価等は properties 側のみで管理者限定）。
+    // 書き込みは importMasterData.js / 管理者操作からのみ（Admin SDK経由か管理者のみ許可）。
+    match /propertyDirectory/{propertyName} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
+    }
     match /employees/{employeeId} {
       allow read: if request.auth != null;
       allow write: if isAdmin();

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { onReservationsChange, deleteReservation } from '../services/reservationService';
+import { onPropertyDirectoryChange } from '../services/propertyDirectoryService';
 import AddReservationModal from './AddReservationModal';
 import EditReservationModal from './EditReservationModal';
 import CompletionReportModal from './CompletionReportModal';
@@ -11,6 +12,8 @@ export default function Reservations({ allowedProperties = null, readOnly = fals
   const [showEditModal, setShowEditModal] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [selectedReservation, setSelectedReservation] = useState(null);
+  const [propertyDirectory, setPropertyDirectory] = useState({});
+  const [customerFilter, setCustomerFilter] = useState('');
 
   useEffect(() => {
     setLoading(true);
@@ -21,9 +24,19 @@ export default function Reservations({ allowedProperties = null, readOnly = fals
       setReservations(filtered);
       setLoading(false);
     });
+    const unsubDirectory = onPropertyDirectoryChange((map) => setPropertyDirectory(map));
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      unsubDirectory();
+    };
   }, [allowedProperties]);
+
+  // 物件名だけでは「桜」「櫻」のように同名・紛らわしいケースがあるため、顧客名を併記する
+  const getCustomerName = (res) => {
+    const name = res.propertyName || res.guestName;
+    return propertyDirectory[name]?.customerName || '';
+  };
 
   const handleEdit = (reservation) => {
     setSelectedReservation(reservation);
@@ -56,11 +69,18 @@ export default function Reservations({ allowedProperties = null, readOnly = fals
   };
 
   // 清掃日順（チェックインの有無では並び替えない。表示上のバッジ・強調のみ）
-  const sortedReservations = [...reservations].sort((a, b) => {
-    const dateA = a.cleaningDate || a.checkOut || '';
-    const dateB = b.cleaningDate || b.checkOut || '';
-    return dateA.localeCompare(dateB);
-  });
+  const sortedReservations = [...reservations]
+    .filter((res) => !customerFilter || getCustomerName(res) === customerFilter)
+    .sort((a, b) => {
+      const dateA = a.cleaningDate || a.checkOut || '';
+      const dateB = b.cleaningDate || b.checkOut || '';
+      return dateA.localeCompare(dateB);
+    });
+
+  // 一覧に出てきている物件の顧客名だけを候補にする（顧客マスタ全件ではなく、実際に使われているものだけ）
+  const customerOptions = Array.from(
+    new Set(reservations.map((res) => getCustomerName(res)).filter(Boolean))
+  ).sort((a, b) => a.localeCompare(b, 'ja'));
 
   return (
     <div className="space-y-6">
@@ -68,14 +88,30 @@ export default function Reservations({ allowedProperties = null, readOnly = fals
         <div>
           <h1 className="text-3xl font-bold text-gray-800">清掃スケジュール管理</h1>
         </div>
-        {!readOnly && (
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-6 rounded-lg transition"
-          >
-            + 新規予定追加
-          </button>
-        )}
+        <div className="flex items-center gap-3">
+          {customerOptions.length > 0 && (
+            <select
+              value={customerFilter}
+              onChange={(e) => setCustomerFilter(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">すべての顧客</option>
+              {customerOptions.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          )}
+          {!readOnly && (
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-6 rounded-lg transition"
+            >
+              + 新規予定追加
+            </button>
+          )}
+        </div>
       </div>
 
       {loading ? (
@@ -89,6 +125,7 @@ export default function Reservations({ allowedProperties = null, readOnly = fals
               <tr>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">イン</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">物件名</th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">顧客</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">清掃日</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">人数</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">備考</th>
@@ -118,6 +155,7 @@ export default function Reservations({ allowedProperties = null, readOnly = fals
                     )}
                   </td>
                   <td className="px-6 py-4 text-gray-800">{res.propertyName || res.guestName}</td>
+                  <td className="px-6 py-4 text-gray-500 text-sm">{getCustomerName(res) || '-'}</td>
                   <td className="px-6 py-4 text-gray-800">{res.cleaningDate || res.checkOut}</td>
                   <td className="px-6 py-4 text-gray-800">{res.persons}</td>
                   <td className="px-6 py-4 text-gray-600 text-sm">{res.notes || '-'}</td>
