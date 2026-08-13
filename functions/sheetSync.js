@@ -251,11 +251,13 @@ function buildGridReservationsForConfig(rows, config) {
       let runEnd = col;
       let lastRaw = raw;
 
+      let isMergeRun = false;
       const mergeEnd = row.mergeEndByCol ? row.mergeEndByCol[col] : undefined;
       if (mergeEnd !== undefined && mergeEnd > col) {
         // Excelの横結合セル: 値は先頭列にしか入らず、結合範囲の残りの列は空文字で読めてしまう。
         // 「その日が空欄=空室」と誤判定しないよう、結合範囲の最終列を実際のチェックアウト日とする。
         runEnd = mergeEnd;
+        isMergeRun = true;
       } else {
         // 結合セルでない場合は、従来通り同じ値が連続して記入されているケース
         // （1マス=1日、同一の人数が複数日にわたって続けて入力される形式）に対応する。
@@ -271,8 +273,14 @@ function buildGridReservationsForConfig(rows, config) {
         }
       }
 
+      // 結合セルは「宿泊日数（夜数）」を表し、清掃・チェックアウトは結合範囲の最終日ではなく
+      // その翌日になるシート（例: 季響庵）がある。物件・タブごとに書き方が異なるため
+      // config.grid.checkoutOffsetDays で列数分のズレを補正できるようにする（既定0 = 最終日そのもの）。
+      const checkoutOffsetDays = (g.checkoutOffsetDays || 0);
+      const cleaningCol = isMergeRun ? runEnd + checkoutOffsetDays : runEnd;
+
       const persons = parseInt(lastRaw, 10);
-      const cleaningDate = dateByCol[runEnd];
+      const cleaningDate = dateByCol[cleaningCol];
       // 1日だけのマークは「チェックアウト/清掃日」のみが分かり、実際のチェックイン日は不明。
       // runStart===runEndの場合にチェックイン日=清掃日としてしまうと、常に自分自身と一致して
       // hasCheckInが誤ってtrueになるため、複数日にまたがる記入がある場合のみ設定する。
