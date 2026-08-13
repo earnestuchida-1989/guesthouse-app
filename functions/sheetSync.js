@@ -68,6 +68,88 @@ function normalizeDate(raw, now) {
   return null;
 }
 
+function pad2(n) {
+  return String(n).padStart(2, '0');
+}
+
+/**
+ * "N日" のような日のみの表記を、チェックイン〜チェックアウト期間内で一意に決まる日付に解決する。
+ * 期間が複数月にまたがる長期滞在でも、その日が期間内に収まる月を探して補完する。
+ * 複数の月で候補が一致してしまう（一意に決まらない）場合は誤爆を避けるため null を返す。
+ */
+function resolveDayWithinRange(day, checkInStr, checkOutStr) {
+  if (!checkInStr || !checkOutStr || day < 1 || day > 31) return null;
+  const start = new Date(`${checkInStr}T00:00:00`);
+  const end = new Date(`${checkOutStr}T00:00:00`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) return null;
+
+  const matches = [];
+  const cursor = new Date(start.getFullYear(), start.getMonth(), 1);
+  while (cursor <= end) {
+    const candidate = new Date(cursor.getFullYear(), cursor.getMonth(), day);
+    // JSのDateは月末超過(例:2月31日)を翌月に繰り上げてしまうため、月がズレていないか確認
+    if (candidate.getMonth() === cursor.getMonth() && candidate >= start && candidate <= end) {
+      matches.push(candidate);
+    }
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+  if (matches.length !== 1) return null;
+  const d = matches[0];
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+/**
+ * 備考欄の自由記述から「途中清掃」「タオル交換」等の中間タスク日を抽出する。
+ * 例: "1,8,15,22日は清掃お願いします。" / "8日と11日に途中清掃お願いします。" / "7/3に途中清掃お願いします。"
+ * 「清掃」「交換」というキーワードを含む備考のみを対象にし、誤検知を避けるため
+ * 一意に解決できない日付は無視する（拾い漏れより誤登録を避けることを優先）。
+ */
+function extractMidStayTaskDates(notes, checkInStr, checkOutStr) {
+  if (!notes) return [];
+  // 「清掃」「交換」という単語が含まれるだけでは日時の言及と紛らわしい雑談的なコメント
+  // （例:「25日、夜チェックインなので、清掃は夕方で大丈夫です」）まで拾ってしまうため、
+  // 「途中清掃」という明示句か、「お願い」という依頼表現が伴う場合のみ対象にする。
+  const isCleaningRequest =
+    /途中清掃/.test(notes) || (/清掃|交換/.test(notes) && /お願い/.test(notes));
+  if (!isCleaningRequest) return [];
+  const dates = new Set();
+
+  // フル日付表記: "7/3"
+  const fullDateRe = /(\d{1,2})\/(\d{1,2})/g;
+  let m;
+  while ((m = fullDateRe.exec(notes))) {
+    const month = parseInt(m[1], 10);
+    const day = parseInt(m[2], 10);
+    if (month < 1 || month > 12) continue;
+    // 滞在期間の年をチェックイン年から推定し、期間内に収まるか確認
+    const start = checkInStr ? new Date(`${checkInStr}T00:00:00`) : null;
+    const end = checkOutStr ? new Date(`${checkOutStr}T00:00:00`) : null;
+    if (!start || !end) continue;
+    for (const year of [start.getFullYear(), end.getFullYear()]) {
+      const candidate = new Date(year, month - 1, day);
+      if (candidate.getMonth() === month - 1 && candidate >= start && candidate <= end) {
+        dates.add(`${year}-${pad2(month)}-${pad2(day)}`);
+      }
+    }
+  }
+
+  // 日のみ表記: "N日" 単体、または "1,8,15,22日" のようなカンマ区切りの一括表記
+  // （最後の数字にだけ「日」が付く書き方に対応するため、直前の"N,"の連続もまとめて拾う）
+  const dayListRe = /((?:\d{1,2}[,、]\s*)*\d{1,2})日/g;
+  while ((m = dayListRe.exec(notes))) {
+    const dayTokens = m[1]
+      .split(/[,、]/)
+      .map((s) => parseInt(s.trim(), 10))
+      .filter((n) => !Number.isNaN(n));
+    for (const day of dayTokens) {
+      const resolved = resolveDayWithinRange(day, checkInStr, checkOutStr);
+      if (resolved) dates.add(resolved);
+    }
+  }
+
+  return Array.from(dates);
+}
+
 /**
  * "16" や "16:30" のような入力を "HH:MM" 形式に正規化。
  */
@@ -444,6 +526,27 @@ async function buildReservationsForConfig(clients, config) {
       notes,
       cancelled,
     });
+
+    // 長期滞在中の備考に「途中清掃」「タオル交換」等の指定があれば、追加の清掃タスクとして展開する
+    if (!cancelled) {
+      const midStayDates = extractMidStayTaskDates(notes, checkIn, checkOut);
+      for (const midDate of midStayDates) {
+        if (midDate === cleaningDate) continue; // 通常の退去清掃日と同日なら重複させない
+        stays.push({
+          rowIndex: row.rowIndex,
+          propertyName,
+          noCleaningNeeded: false,
+          checkIn: null,
+          checkOut: null,
+          cleaningDate: midDate,
+          checkInTime: '',
+          persons,
+          notes: `【途中清掃】${notes}`,
+          cancelled: false,
+          isMidStay: true,
+        });
+      }
+    }
   }
 
   // 物件ごとにグルーピングし、「あるステイの清掃日 == 別ステイのチェックイン日」なら hasCheckIn = true
@@ -464,8 +567,10 @@ async function buildReservationsForConfig(clients, config) {
         !!checkInDatesByProperty[stay.propertyName] &&
         checkInDatesByProperty[stay.propertyName].has(stay.cleaningDate);
 
+      const baseDocId = `sheet_${sanitizeForId(config.sheetId)}_${sanitizeForId(config.tabName)}_row${stay.rowIndex}`;
       return {
-        docId: `sheet_${sanitizeForId(config.sheetId)}_${sanitizeForId(config.tabName)}_row${stay.rowIndex}`,
+        // 途中清掃タスクは同じ行から複数日ぶん生成されうるため、日付をIDに含めて一意にする
+        docId: stay.isMidStay ? `${baseDocId}_mid${stay.cleaningDate}` : baseDocId,
         data: {
           propertyName: stay.propertyName,
           cleaningDate: stay.cleaningDate,
@@ -475,6 +580,7 @@ async function buildReservationsForConfig(clients, config) {
           status: stay.cancelled ? 'cancelled' : stay.noCleaningNeeded ? 'no_cleaning_needed' : 'confirmed',
           hasCheckIn,
           checkInTime: stay.checkInTime || '',
+          isMidStayTask: !!stay.isMidStay,
           source: 'sheet',
           sheetId: config.sheetId,
           sheetConfigId: config.id,
@@ -524,4 +630,11 @@ async function syncAllSheets(db, serviceAccountKeyJson) {
   return results;
 }
 
-module.exports = { syncAllSheets, buildReservationsForConfig, normalizeDate, normalizeTime };
+module.exports = {
+  syncAllSheets,
+  buildReservationsForConfig,
+  normalizeDate,
+  normalizeTime,
+  extractMidStayTaskDates,
+  resolveDayWithinRange,
+};
