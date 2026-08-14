@@ -13,11 +13,27 @@ import {
   deleteProperty,
   propertyExists,
 } from '../services/propertyService';
+import { downloadXLSX } from '../utils/xlsxExport';
 
 const CUSTOMER_TYPE_LABELS = {
   internal: '自社',
   external: '外部',
 };
+
+const CUSTOMER_CSV_COLUMNS = [
+  { key: 'id', label: '顧客ID' },
+  { key: 'name', label: '顧客名' },
+  { key: 'type', label: 'タイプ', format: (c) => CUSTOMER_TYPE_LABELS[c.type] || c.type || '' },
+  { key: 'contactName', label: '担当者名' },
+  { key: 'phone', label: '電話番号' },
+  { key: 'email', label: 'メール' },
+  { key: 'billingAddress', label: '請求先住所' },
+  { key: 'paymentMethod', label: '支払方法' },
+  { key: 'contractStart', label: '契約開始日' },
+  { key: 'contractEnd', label: '契約終了日' },
+  { key: 'notes', label: '備考' },
+  { key: 'active', label: '状態', format: (c) => (c.active === false ? '無効' : '有効') },
+];
 
 export default function MasterDataManagement() {
   const [tab, setTab] = useState('customers');
@@ -29,6 +45,7 @@ export default function MasterDataManagement() {
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [showPropertyModal, setShowPropertyModal] = useState(false);
   const [editingProperty, setEditingProperty] = useState(null);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     const unsubCustomers = onCustomersChange((data) => {
@@ -81,6 +98,38 @@ export default function MasterDataManagement() {
     }
   };
 
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  const propertyCsvColumns = [
+    { key: 'name', label: '物件名' },
+    { key: 'propertyId', label: '物件ID' },
+    { key: 'customerId', label: '顧客', format: (p) => (p.customerId ? (customerNameById[p.customerId] || p.customerId) : '') },
+    { key: 'cleaningPrice', label: '清掃単価（円）', format: (p) => (typeof p.cleaningPrice === 'number' ? p.cleaningPrice : '') },
+    { key: 'address', label: '住所' },
+    { key: 'totalRooms', label: '総部屋数', format: (p) => (typeof p.totalRooms === 'number' ? p.totalRooms : '') },
+    { key: 'operationType', label: '運営タイプ' },
+    { key: 'managerName', label: 'マネージャー名' },
+    { key: 'managerPhone', label: 'マネージャー電話' },
+    { key: 'notes', label: '備考' },
+    { key: 'active', label: '状態', format: (p) => (p.active === false ? '無効' : '有効') },
+  ];
+
+  // 検索で絞り込んでいる場合は、その結果だけをエクスポートする（画面に見えている分＝出力される分、を分かりやすくするため）
+  const handleExportExcel = async () => {
+    setExporting(true);
+    try {
+      if (tab === 'customers') {
+        await downloadXLSX(`顧客マスタ_${todayStr}.xlsx`, '顧客マスタ', filteredCustomers, CUSTOMER_CSV_COLUMNS);
+      } else {
+        await downloadXLSX(`物件マスタ_${todayStr}.xlsx`, '物件マスタ', filteredProperties, propertyCsvColumns);
+      }
+    } catch (err) {
+      alert('Excel出力に失敗しました: ' + err.message);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div>
       <h2 className="text-3xl font-bold text-gray-800 mb-2">📇 マスタデータ管理</h2>
@@ -116,20 +165,30 @@ export default function MasterDataManagement() {
           placeholder={tab === 'customers' ? '顧客名・IDで検索...' : '物件名・顧客名で検索...'}
           className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:w-64"
         />
-        <button
-          onClick={() => {
-            if (tab === 'customers') {
-              setEditingCustomer(null);
-              setShowCustomerModal(true);
-            } else {
-              setEditingProperty(null);
-              setShowPropertyModal(true);
-            }
-          }}
-          className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-6 rounded-lg transition whitespace-nowrap"
-        >
-          + {tab === 'customers' ? '顧客を追加' : '物件を追加'}
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={handleExportExcel}
+            disabled={exporting || (tab === 'customers' ? filteredCustomers : filteredProperties).length === 0}
+            className="bg-white hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed text-gray-700 font-bold py-2 px-4 rounded-lg border border-gray-300 transition whitespace-nowrap"
+            title="今表示されている一覧をExcelファイル（.xlsx）でダウンロード"
+          >
+            {exporting ? '出力中...' : '⬇️ Excel出力'}
+          </button>
+          <button
+            onClick={() => {
+              if (tab === 'customers') {
+                setEditingCustomer(null);
+                setShowCustomerModal(true);
+              } else {
+                setEditingProperty(null);
+                setShowPropertyModal(true);
+              }
+            }}
+            className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-6 rounded-lg transition whitespace-nowrap"
+          >
+            + {tab === 'customers' ? '顧客を追加' : '物件を追加'}
+          </button>
+        </div>
       </div>
 
       {loading ? (
