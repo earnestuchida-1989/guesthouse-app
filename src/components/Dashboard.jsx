@@ -22,6 +22,7 @@ const NAV_ITEMS = [
 export default function Dashboard({ user, onLogout }) {
   const [currentPage, setCurrentPage] = useState('overview');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [allReservations, setAllReservations] = useState([]);
   const [propertyAssignments, setPropertyAssignments] = useState({});
   const [propertyMaster, setPropertyMaster] = useState({});
@@ -74,6 +75,29 @@ export default function Dashboard({ user, onLogout }) {
     onLogout();
   };
 
+  // 更新があれば main.jsx 側の onNeedRefresh が自動でリロードする。
+  // 何も起きなければ「最新版です」の表示に戻すだけ。
+  const handleCheckUpdate = async () => {
+    setCheckingUpdate(true);
+    try {
+      await window.__checkForAppUpdate?.();
+    } finally {
+      setTimeout(() => setCheckingUpdate(false), 2500);
+    }
+  };
+
+  const updateCheckButton = (
+    <button
+      onClick={handleCheckUpdate}
+      disabled={checkingUpdate}
+      className="text-gray-500 hover:text-gray-800 disabled:opacity-50 p-2 -mr-1"
+      title="最新版を確認"
+      aria-label="最新版を確認"
+    >
+      <span className={checkingUpdate ? 'inline-block animate-spin' : 'inline-block'}>🔄</span>
+    </button>
+  );
+
   // 顧客アカウントは専用の簡易レイアウト（清掃報告の閲覧・フィードバックのみ）を表示する
   if (isCustomer) {
     return (
@@ -86,6 +110,7 @@ export default function Dashboard({ user, onLogout }) {
             </div>
             <div className="flex items-center gap-4">
               <span className="text-sm text-gray-600">{user?.email || 'Guest'}</span>
+              {updateCheckButton}
               <button
                 onClick={handleLogout}
                 className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition"
@@ -183,6 +208,7 @@ export default function Dashboard({ user, onLogout }) {
           </div>
           <div className="flex items-center gap-2 sm:gap-4">
             <span className="hidden sm:inline text-sm text-gray-600">{user?.email || 'Guest'}</span>
+            {updateCheckButton}
             <button
               onClick={handleLogout}
               className="bg-red-500 hover:bg-red-600 text-white px-3 py-2 sm:px-4 rounded-lg transition text-sm sm:text-base"
