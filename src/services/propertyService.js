@@ -1,7 +1,8 @@
 import { db } from '../firebase';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore';
 
 const PROPERTIES_COLLECTION = 'properties';
+const DIRECTORY_COLLECTION = 'propertyDirectory';
 
 /**
  * Firestoreの物件マスタ（properties コレクション、doc ID=物件名）をリアルタイム監視。
@@ -17,4 +18,46 @@ export const onPropertiesChange = (callback) => {
     });
     callback(map);
   });
+};
+
+// 物件名が既に存在するか確認（新規作成時の重複チェック用）
+export const propertyExists = async (propertyName) => {
+  const snap = await getDoc(doc(db, PROPERTIES_COLLECTION, propertyName));
+  return snap.exists();
+};
+
+// propertyDirectory（物件名→顧客名の軽量コピー、スタッフ・協力業者も読める）を同期更新
+const syncPropertyDirectory = async (propertyName, customerId, customerName) => {
+  await setDoc(doc(db, DIRECTORY_COLLECTION, propertyName), {
+    customerId: customerId || '',
+    customerName: customerId ? (customerName || customerId) : '',
+    updatedAt: new Date().toISOString(),
+  });
+};
+
+// マスタデータ管理画面用：物件を新規作成（doc ID=物件名。作成後は物件名を変更しない運用とする。
+// 予約データ等が物件名の文字列で紐付いているため、リネームすると既存の予約と紐付かなくなる）
+export const addProperty = async (propertyName, data, customerName) => {
+  await setDoc(doc(db, PROPERTIES_COLLECTION, propertyName), {
+    ...data,
+    updatedAt: new Date().toISOString(),
+  });
+  await syncPropertyDirectory(propertyName, data.customerId, customerName);
+  return propertyName;
+};
+
+// 既存の物件情報を更新
+export const updateProperty = async (propertyName, data, customerName) => {
+  await updateDoc(doc(db, PROPERTIES_COLLECTION, propertyName), {
+    ...data,
+    updatedAt: new Date().toISOString(),
+  });
+  await syncPropertyDirectory(propertyName, data.customerId, customerName);
+};
+
+// 物件を削除（物件ディレクトリも合わせて削除。清掃予定・担当割り当ては削除しないので、
+// 削除前に既存の予約・割り当てがないか呼び出し側で確認すること）
+export const deleteProperty = async (propertyName) => {
+  await deleteDoc(doc(db, PROPERTIES_COLLECTION, propertyName));
+  await deleteDoc(doc(db, DIRECTORY_COLLECTION, propertyName));
 };

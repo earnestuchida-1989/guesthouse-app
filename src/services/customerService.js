@@ -1,5 +1,5 @@
 import { db } from '../firebase';
-import { collection, onSnapshot, doc, setDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore';
 
 const CUSTOMERS_COLLECTION = 'customers';
 
@@ -21,4 +21,34 @@ export const addCustomer = async (name) => {
     createdAt: new Date().toISOString(),
   });
   return id;
+};
+
+// マスタデータ管理画面用：顧客IDを指定して新規作成（importMasterData.js の顧客マスタと同じ項目構成）。
+// 既存IDと重複していないかは呼び出し側（フォーム）で確認する。
+export const createCustomer = async (id, data) => {
+  await setDoc(doc(db, CUSTOMERS_COLLECTION, id), {
+    ...data,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+  return id;
+};
+
+// 既存の顧客情報を更新
+export const updateCustomer = async (id, data) => {
+  await updateDoc(doc(db, CUSTOMERS_COLLECTION, id), {
+    ...data,
+    updatedAt: new Date().toISOString(),
+  });
+};
+
+// 顧客を削除
+export const deleteCustomer = async (id) => {
+  await deleteDoc(doc(db, CUSTOMERS_COLLECTION, id));
+};
+
+// 顧客IDが既に存在するか確認（新規作成時の重複チェック用）
+export const customerExists = async (id) => {
+  const snap = await getDoc(doc(db, CUSTOMERS_COLLECTION, id));
+  return snap.exists();
 };
