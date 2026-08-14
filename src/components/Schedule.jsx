@@ -6,7 +6,18 @@ function toDateStr(y, m, d) {
   return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 }
 
-export default function Schedule({ allowedProperties = null }) {
+// 混雑度（その日の清掃件数）に応じたグラデーション。件数が多いほど濃い青になり、
+// 「忙しい日」が一目で分かるようにする（従来はチェックインの有無だけをオレンジで示していた）。
+function heatColor(count) {
+  if (count === 0) return 'bg-white text-gray-800 font-semibold border-gray-200 hover:border-gray-400';
+  if (count === 1) return 'bg-blue-100 text-blue-900 font-semibold border-blue-200 hover:bg-blue-200';
+  if (count === 2) return 'bg-blue-300 text-blue-900 font-bold border-blue-400 hover:bg-blue-400';
+  if (count === 3) return 'bg-blue-500 text-white font-bold border-blue-600 hover:bg-blue-600';
+  if (count === 4) return 'bg-blue-700 text-white font-bold border-blue-800 hover:bg-blue-800';
+  return 'bg-blue-950 text-white font-bold border-black hover:bg-black';
+}
+
+export default function Schedule({ allowedProperties = null, isAdmin = false, vendors = [], propertyAssignments = {} }) {
   const [currentMonth, setCurrentMonth] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth());
@@ -15,6 +26,7 @@ export default function Schedule({ allowedProperties = null }) {
   const [propertyDirectory, setPropertyDirectory] = useState({});
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState(null);
+  const [vendorFilter, setVendorFilter] = useState('');
 
   useEffect(() => {
     const unsubscribe = onReservationsChange((data) => {
@@ -37,6 +49,15 @@ export default function Schedule({ allowedProperties = null }) {
     return propertyDirectory[name]?.customerName || '';
   };
 
+  const vendorNameById = Object.fromEntries(vendors.map((v) => [v.id, v.name]));
+  const getVendorId = (res) => propertyAssignments[res.propertyName || res.guestName] || null;
+  const vendorFiltered = vendorFilter
+    ? reservations.filter((r) => {
+        const vid = getVendorId(r);
+        return vendorFilter === 'direct' ? !vid : vid === vendorFilter;
+      })
+    : reservations;
+
   const daysInMonth = (date) => new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
   const firstDayOfMonth = (date) => new Date(date.getFullYear(), date.getMonth(), 1).getDay();
 
@@ -49,7 +70,7 @@ export default function Schedule({ allowedProperties = null }) {
   for (let i = 0; i < startingDayOfWeek; i++) days.push(null);
   for (let i = 1; i <= totalDays; i++) days.push(i);
 
-  const activeReservations = reservations.filter((r) => r.status !== 'cancelled');
+  const activeReservations = vendorFiltered.filter((r) => r.status !== 'cancelled');
 
   // この月に該当する予約（清掃日基準）
   const monthReservations = activeReservations
@@ -89,7 +110,25 @@ export default function Schedule({ allowedProperties = null }) {
 
   return (
     <div>
-      <h2 className="text-3xl font-bold text-gray-800 mb-6">🗓️ スケジュール</h2>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <h2 className="text-3xl font-bold text-gray-800">🗓️ スケジュール</h2>
+        {isAdmin && vendors.length > 0 && (
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">担当業者で絞り込み</label>
+            <select
+              value={vendorFilter}
+              onChange={(e) => { setVendorFilter(e.target.value); setSelectedDate(null); }}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">すべて</option>
+              <option value="direct">🏠 直営</option>
+              {vendors.map((v) => (
+                <option key={v.id} value={v.id}>{v.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
+      </div>
 
       {loading ? (
         <div className="text-center py-12">
@@ -142,26 +181,25 @@ export default function Schedule({ allowedProperties = null }) {
                 const isBooked = bookedDaySet.has(day);
                 const hasCheckIn = checkInDaySet.has(day);
                 const isSelected = selectedDate === dateStr;
+                const count = isBooked ? reservationsByDate[dateStr].length : 0;
                 return (
                   <button
                     key={index}
                     onClick={() => setSelectedDate(isSelected ? null : dateStr)}
-                    className={`aspect-square flex flex-col items-center justify-center rounded-lg border-2 transition ${
-                      isSelected
-                        ? 'ring-2 ring-offset-1 ring-gray-800'
-                        : ''
-                    } ${
-                      hasCheckIn
-                        ? 'bg-orange-500 text-white font-bold border-orange-600 hover:bg-orange-600'
-                        : isBooked
-                        ? 'bg-blue-500 text-white font-bold border-blue-600 hover:bg-blue-600'
-                        : 'bg-white text-gray-800 font-semibold border-gray-200 hover:border-gray-400'
-                    }`}
+                    className={`relative aspect-square flex flex-col items-center justify-center rounded-lg border-2 transition ${
+                      isSelected ? 'ring-2 ring-offset-1 ring-gray-800' : ''
+                    } ${heatColor(count)}`}
                   >
+                    {hasCheckIn && (
+                      <span
+                        className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-orange-500 ring-1 ring-white"
+                        title="チェックインあり（要優先対応）"
+                      />
+                    )}
                     <span>{day}</span>
                     {isBooked && (
                       <span className="text-[10px] leading-none mt-0.5">
-                        {reservationsByDate[dateStr].length}件
+                        {count}件
                       </span>
                     )}
                   </button>
@@ -169,13 +207,19 @@ export default function Schedule({ allowedProperties = null }) {
               })}
             </div>
 
-            <div className="mt-6 pt-6 border-t flex flex-wrap gap-4">
-              <p className="text-sm text-gray-600 flex items-center">
-                <span className="inline-block w-4 h-4 bg-blue-500 rounded mr-2"></span>
-                <span>清掃予定あり</span>
+            <div className="mt-6 pt-6 border-t flex flex-wrap items-center gap-4">
+              <p className="text-sm text-gray-600 flex items-center gap-1">
+                <span>混雑度:</span>
+                <span className="inline-block w-4 h-4 bg-white border border-gray-300 rounded"></span>
+                <span className="inline-block w-4 h-4 bg-blue-100 rounded"></span>
+                <span className="inline-block w-4 h-4 bg-blue-300 rounded"></span>
+                <span className="inline-block w-4 h-4 bg-blue-500 rounded"></span>
+                <span className="inline-block w-4 h-4 bg-blue-700 rounded"></span>
+                <span className="inline-block w-4 h-4 bg-blue-950 rounded"></span>
+                <span>少ない→多い</span>
               </p>
               <p className="text-sm text-gray-600 flex items-center">
-                <span className="inline-block w-4 h-4 bg-orange-500 rounded mr-2"></span>
+                <span className="inline-block w-3 h-3 bg-orange-500 rounded-full mr-2"></span>
                 <span>チェックインあり（要優先対応）</span>
               </p>
             </div>

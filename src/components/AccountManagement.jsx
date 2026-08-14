@@ -28,6 +28,8 @@ export default function AccountManagement({ currentUid }) {
   const [newAccountResult, setNewAccountResult] = useState(null);
   const [resettingUid, setResettingUid] = useState(null);
   const [linkingUser, setLinkingUser] = useState(null);
+  const [linkingVendorUser, setLinkingVendorUser] = useState(null);
+  const [linkingCustomerUser, setLinkingCustomerUser] = useState(null);
 
   useEffect(() => {
     const unsubscribe = onUsersChange((data) => {
@@ -80,6 +82,24 @@ export default function AccountManagement({ currentUid }) {
     }
   };
 
+  const handleSaveVendorLink = async (uid, vendorId) => {
+    try {
+      await setUserRole(uid, 'contractor', vendorId);
+      setLinkingVendorUser(null);
+    } catch (err) {
+      alert('紐付けの変更に失敗しました: ' + err.message);
+    }
+  };
+
+  const handleSaveCustomerLink = async (uid, customerId) => {
+    try {
+      await setUserRole(uid, 'customer', undefined, customerId);
+      setLinkingCustomerUser(null);
+    } catch (err) {
+      alert('紐付けの変更に失敗しました: ' + err.message);
+    }
+  };
+
   const handleResetPassword = async (u) => {
     if (!window.confirm(`${u.email} のパスワードを再発行しますか？\n現在のパスワードは使えなくなります。`)) return;
     setResettingUid(u.id);
@@ -109,24 +129,24 @@ export default function AccountManagement({ currentUid }) {
         <p className="text-gray-600">データ読み込み中...</p>
       ) : (
         <div className="bg-white rounded-lg shadow overflow-x-auto">
-          <table className="w-full min-w-[820px]">
+          <table className="w-full min-w-[900px] text-sm">
             <thead className="bg-gray-100 border-b-2 border-gray-300">
               <tr>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">メールアドレス</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">名前</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">権限</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">状態</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">操作</th>
+                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">メールアドレス</th>
+                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">名前</th>
+                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">権限</th>
+                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">状態</th>
+                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">操作</th>
               </tr>
             </thead>
             <tbody>
               {users.map((u) => (
                 <tr key={u.id} className="border-b hover:bg-gray-50">
-                  <td className="px-6 py-4 text-gray-800">{u.email}</td>
-                  <td className="px-6 py-4 text-gray-600">{u.displayName || '-'}</td>
-                  <td className="px-6 py-4">
+                  <td className="px-3 py-1.5 text-gray-800 max-w-[12rem] truncate" title={u.email}>{u.email}</td>
+                  <td className="px-3 py-1.5 text-gray-600 max-w-[8rem] truncate" title={u.displayName || ''}>{u.displayName || '-'}</td>
+                  <td className="px-3 py-1.5">
                     <span
-                      className={`px-3 py-1 rounded-full text-sm font-semibold ${
+                      className={`px-2 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap ${
                         u.role === 'admin'
                           ? 'bg-purple-100 text-purple-800'
                           : u.role === 'contractor'
@@ -139,54 +159,70 @@ export default function AccountManagement({ currentUid }) {
                       {ROLE_LABELS[u.role] || u.role}
                     </span>
                     {u.role === 'contractor' && u.vendorId && (
-                      <span className="block text-xs text-gray-500 mt-1">
+                      <span className="block text-xs text-gray-500 mt-0.5">
                         {vendorNameById[u.vendorId] || '不明な業者'}
                       </span>
                     )}
                     {u.role === 'customer' && u.customerId && (
-                      <span className="block text-xs text-gray-500 mt-1">
+                      <span className="block text-xs text-gray-500 mt-0.5">
                         {customerNameById[u.customerId] || '不明な顧客'}
                       </span>
                     )}
                     {u.employeeId && (
-                      <span className="block text-xs text-gray-500 mt-1">
+                      <span className="block text-xs text-gray-500 mt-0.5">
                         👷 {employeeNameById[u.employeeId] || '不明な従業員'}
                       </span>
                     )}
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-3 py-1.5">
                     <span
-                      className={`px-3 py-1 rounded-full text-sm font-semibold ${
+                      className={`px-2 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap ${
                         u.active === false ? 'bg-gray-200 text-gray-600' : 'bg-green-100 text-green-800'
                       }`}
                     >
                       {u.active === false ? '無効' : '有効'}
                     </span>
                   </td>
-                  <td className="px-6 py-4 space-x-2 whitespace-nowrap">
+                  <td className="px-3 py-1.5 space-x-1 whitespace-nowrap">
                     <button
                       onClick={() => handleRoleToggle(u)}
-                      className="bg-purple-500 hover:bg-purple-600 text-white font-bold py-1 px-3 rounded text-sm transition"
+                      className="bg-purple-500 hover:bg-purple-600 text-white font-bold py-0.5 px-2 rounded text-xs transition"
                     >
                       権限切替
                     </button>
                     <button
                       onClick={() => setLinkingUser(u)}
-                      className="bg-teal-500 hover:bg-teal-600 text-white font-bold py-1 px-3 rounded text-sm transition"
+                      className="bg-teal-500 hover:bg-teal-600 text-white font-bold py-0.5 px-2 rounded text-xs transition"
                     >
                       従業員紐付け
                     </button>
+                    {u.role === 'contractor' && (
+                      <button
+                        onClick={() => setLinkingVendorUser(u)}
+                        className="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-0.5 px-2 rounded text-xs transition"
+                      >
+                        業者紐付け
+                      </button>
+                    )}
+                    {u.role === 'customer' && (
+                      <button
+                        onClick={() => setLinkingCustomerUser(u)}
+                        className="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-0.5 px-2 rounded text-xs transition"
+                      >
+                        顧客紐付け
+                      </button>
+                    )}
                     <button
                       onClick={() => handleResetPassword(u)}
                       disabled={resettingUid === u.id}
-                      className="bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 text-white font-bold py-1 px-3 rounded text-sm transition"
+                      className="bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 text-white font-bold py-0.5 px-2 rounded text-xs transition"
                     >
                       {resettingUid === u.id ? '発行中...' : 'パスワード再発行'}
                     </button>
                     <button
                       onClick={() => handleActiveToggle(u)}
                       disabled={u.id === currentUid}
-                      className="bg-red-500 hover:bg-red-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold py-1 px-3 rounded text-sm transition"
+                      className="bg-red-500 hover:bg-red-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold py-0.5 px-2 rounded text-xs transition"
                     >
                       {u.active === false ? '有効化' : '無効化'}
                     </button>
@@ -245,6 +281,166 @@ export default function AccountManagement({ currentUid }) {
           onClose={() => setLinkingUser(null)}
         />
       )}
+
+      {linkingVendorUser && (
+        <LinkVendorModal
+          user={linkingVendorUser}
+          vendors={vendors}
+          onSave={handleSaveVendorLink}
+          onClose={() => setLinkingVendorUser(null)}
+        />
+      )}
+
+      {linkingCustomerUser && (
+        <LinkCustomerModal
+          user={linkingCustomerUser}
+          customers={customers}
+          onSave={handleSaveCustomerLink}
+          onClose={() => setLinkingCustomerUser(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function LinkVendorModal({ user, vendors, onSave, onClose }) {
+  const [vendorId, setVendorId] = useState(user.vendorId || '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!vendorId) {
+      setError('業者を選択してください');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    await onSave(user.id, vendorId);
+    setSaving(false);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-sm w-full">
+        <div className="bg-indigo-500 text-white px-6 py-4 flex justify-between items-center">
+          <h2 className="text-lg font-bold">協力業者と紐付け</h2>
+          <button onClick={onClose} className="text-white hover:text-gray-200 text-2xl leading-none">×</button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <p className="text-sm text-gray-600">{user.email}</p>
+          {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded text-sm">{error}</div>}
+          <div>
+            <label className="block text-gray-700 font-semibold mb-2">所属業者 *</label>
+            <select
+              value={vendorId}
+              onChange={(e) => setVendorId(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            >
+              <option value="">選択してください</option>
+              {vendors.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.name}
+                </option>
+              ))}
+            </select>
+            {vendors.length === 0 && (
+              <p className="text-xs text-orange-600 mt-2">
+                協力業者が未登録です。先に「協力業者管理」画面で業者を登録してください。
+              </p>
+            )}
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg transition"
+              disabled={saving}
+            >
+              キャンセル
+            </button>
+            <button
+              type="submit"
+              className="flex-1 bg-indigo-500 hover:bg-indigo-600 disabled:bg-gray-400 text-white font-bold py-2 px-4 rounded-lg transition"
+              disabled={saving}
+            >
+              {saving ? '保存中...' : '保存'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function LinkCustomerModal({ user, customers, onSave, onClose }) {
+  const [customerId, setCustomerId] = useState(user.customerId || '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!customerId) {
+      setError('顧客を選択してください');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    await onSave(user.id, customerId);
+    setSaving(false);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-sm w-full">
+        <div className="bg-indigo-500 text-white px-6 py-4 flex justify-between items-center">
+          <h2 className="text-lg font-bold">顧客と紐付け</h2>
+          <button onClick={onClose} className="text-white hover:text-gray-200 text-2xl leading-none">×</button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <p className="text-sm text-gray-600">{user.email}</p>
+          {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded text-sm">{error}</div>}
+          <div>
+            <label className="block text-gray-700 font-semibold mb-2">顧客 *</label>
+            <select
+              value={customerId}
+              onChange={(e) => setCustomerId(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            >
+              <option value="">選択してください</option>
+              {customers.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+            {customers.length === 0 && (
+              <p className="text-xs text-orange-600 mt-2">
+                顧客が未登録です。先に「マスタデータ管理」の顧客マスタで登録してください。
+              </p>
+            )}
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg transition"
+              disabled={saving}
+            >
+              キャンセル
+            </button>
+            <button
+              type="submit"
+              className="flex-1 bg-indigo-500 hover:bg-indigo-600 disabled:bg-gray-400 text-white font-bold py-2 px-4 rounded-lg transition"
+              disabled={saving}
+            >
+              {saving ? '保存中...' : '保存'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

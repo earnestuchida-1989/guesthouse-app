@@ -5,7 +5,15 @@ import AddReservationModal from './AddReservationModal';
 import EditReservationModal from './EditReservationModal';
 import CompletionReportModal from './CompletionReportModal';
 
-export default function Reservations({ allowedProperties = null, readOnly = false, canReport = true, currentUser = null, isAdmin = false }) {
+export default function Reservations({
+  allowedProperties = null,
+  readOnly = false,
+  canReport = true,
+  currentUser = null,
+  isAdmin = false,
+  vendors = [],
+  propertyAssignments = {},
+}) {
   const [reservations, setReservations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -17,6 +25,7 @@ export default function Reservations({ allowedProperties = null, readOnly = fals
   const [propertySearch, setPropertySearch] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [vendorFilter, setVendorFilter] = useState('');
 
   useEffect(() => {
     setLoading(true);
@@ -40,6 +49,8 @@ export default function Reservations({ allowedProperties = null, readOnly = fals
     const name = res.propertyName || res.guestName;
     return propertyDirectory[name]?.customerName || '';
   };
+
+  const getVendorId = (res) => propertyAssignments[res.propertyName || res.guestName] || null;
 
   // Googleスプレッドシート／カレンダーから自動取り込みされた予定には、
   // 元データ（同期元のシート・カレンダー）へのリンクを付ける。
@@ -106,18 +117,24 @@ export default function Reservations({ allowedProperties = null, readOnly = fals
       if (dateTo && date > dateTo) return false;
       return true;
     })
+    .filter((res) => {
+      if (!vendorFilter) return true;
+      const vid = getVendorId(res);
+      return vendorFilter === 'direct' ? !vid : vid === vendorFilter;
+    })
     .sort((a, b) => {
       const dateA = a.cleaningDate || a.checkOut || '';
       const dateB = b.cleaningDate || b.checkOut || '';
       return dateA.localeCompare(dateB);
     });
 
-  const hasActiveFilters = customerFilter || propertySearch || dateFrom || dateTo;
+  const hasActiveFilters = customerFilter || propertySearch || dateFrom || dateTo || vendorFilter;
   const clearFilters = () => {
     setCustomerFilter('');
     setPropertySearch('');
     setDateFrom('');
     setDateTo('');
+    setVendorFilter('');
   };
 
   // 一覧に出てきている物件の顧客名だけを候補にする（顧客マスタ全件ではなく、実際に使われているものだけ）
@@ -203,6 +220,22 @@ export default function Reservations({ allowedProperties = null, readOnly = fals
                   <option key={name} value={name}>
                     {name}
                   </option>
+                ))}
+              </select>
+            </div>
+          )}
+          {isAdmin && vendors.length > 0 && (
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">担当業者</label>
+              <select
+                value={vendorFilter}
+                onChange={(e) => setVendorFilter(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">すべて</option>
+                <option value="direct">🏠 直営</option>
+                {vendors.map((v) => (
+                  <option key={v.id} value={v.id}>{v.name}</option>
                 ))}
               </select>
             </div>

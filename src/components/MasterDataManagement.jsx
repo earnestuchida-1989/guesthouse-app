@@ -21,6 +21,7 @@ import {
   employeeExists,
 } from '../services/employeeService';
 import { onReservationsChange } from '../services/reservationService';
+import { onVendorsChange, onPropertyAssignmentsChange } from '../services/vendorService';
 import { downloadXLSX } from '../utils/xlsxExport';
 
 const CUSTOMER_TYPE_LABELS = {
@@ -64,6 +65,8 @@ export default function MasterDataManagement() {
   const [properties, setProperties] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [reservations, setReservations] = useState([]);
+  const [vendors, setVendors] = useState([]);
+  const [propertyAssignments, setPropertyAssignments] = useState({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [showCustomerModal, setShowCustomerModal] = useState(false);
@@ -90,20 +93,32 @@ export default function MasterDataManagement() {
       setEmployees(data.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ja')));
     });
     const unsubReservations = onReservationsChange(setReservations);
+    const unsubVendors = onVendorsChange((data) => setVendors(data));
+    const unsubAssignments = onPropertyAssignmentsChange((map) => setPropertyAssignments(map));
     return () => {
       unsubCustomers();
       unsubProperties();
       unsubEmployees();
       unsubReservations();
+      unsubVendors();
+      unsubAssignments();
     };
   }, []);
 
   const customerNameById = Object.fromEntries(customers.map((c) => [c.id, c.name]));
+  const vendorNameById = Object.fromEntries(vendors.map((v) => [v.id, v.name]));
+
+  // 担当業者は propertyAssignments（協力業者アカウントも読める公開コピー）を正として表示する。
+  // properties.vendorId は編集画面での初期値目的で持たせているだけなので、表示は常にこちらを優先する。
+  const propertiesWithVendor = properties.map((p) => ({
+    ...p,
+    vendorId: propertyAssignments[p.name] || null,
+  }));
 
   const filteredCustomers = customers.filter(
     (c) => !search || c.name?.includes(search) || c.id.includes(search)
   );
-  const filteredProperties = properties.filter(
+  const filteredProperties = propertiesWithVendor.filter(
     (p) => !search || p.name.includes(search) || (p.customerId && customerNameById[p.customerId]?.includes(search))
   );
   const filteredEmployees = employees.filter(
@@ -171,6 +186,7 @@ export default function MasterDataManagement() {
     { key: 'name', label: '物件名' },
     { key: 'propertyId', label: '物件ID' },
     { key: 'customerId', label: '顧客', format: (p) => (p.customerId ? (customerNameById[p.customerId] || p.customerId) : '') },
+    { key: 'vendorId', label: '担当業者', format: (p) => (p.vendorId ? (vendorNameById[p.vendorId] || p.vendorId) : '') },
     { key: 'cleaningPrice', label: '清掃単価（円・顧客請求額）', format: (p) => (typeof p.cleaningPrice === 'number' ? p.cleaningPrice : '') },
     { key: 'outsourceAmount', label: '委託金額（円・業者への支払額）', format: (p) => (typeof p.outsourceAmount === 'number' ? p.outsourceAmount : '') },
     { key: 'address', label: '住所' },
@@ -359,47 +375,47 @@ export default function MasterDataManagement() {
 
           {/* デスクトップ：テーブル表示 */}
           <div className="hidden md:block overflow-x-auto">
-            <table className="w-full min-w-[720px]">
+            <table className="w-full min-w-[640px]">
               <thead className="bg-gray-100 border-b-2 border-gray-300">
                 <tr>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">顧客ID</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">顧客名</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">タイプ</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">担当者</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">連絡先</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">状態</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">操作</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">顧客ID</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">顧客名</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">タイプ</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">担当者</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">連絡先</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">状態</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">操作</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredCustomers.map((c) => (
                   <tr key={c.id} className="border-b hover:bg-gray-50">
-                    <td className="px-6 py-4 text-gray-500 text-sm font-mono">{c.id}</td>
-                    <td className="px-6 py-4 text-gray-800 font-semibold">{c.name}</td>
-                    <td className="px-6 py-4 text-gray-600 text-sm">{CUSTOMER_TYPE_LABELS[c.type] || c.type || '-'}</td>
-                    <td className="px-6 py-4 text-gray-600 text-sm">{c.contactName || '-'}</td>
-                    <td className="px-6 py-4 text-gray-600 text-sm">
+                    <td className="px-3 py-1.5 text-gray-500 text-xs font-mono whitespace-nowrap">{c.id}</td>
+                    <td className="px-3 py-1.5 text-gray-800 font-semibold text-sm max-w-[8rem] truncate" title={c.name}>{c.name}</td>
+                    <td className="px-3 py-1.5 text-gray-600 text-sm whitespace-nowrap">{CUSTOMER_TYPE_LABELS[c.type] || c.type || '-'}</td>
+                    <td className="px-3 py-1.5 text-gray-600 text-sm max-w-[6rem] truncate" title={c.contactName || ''}>{c.contactName || '-'}</td>
+                    <td className="px-3 py-1.5 text-gray-600 text-xs max-w-[9rem] truncate">
                       {c.phone && <span className="block">{c.phone}</span>}
                       {c.email && <span className="block">{c.email}</span>}
                       {!c.phone && !c.email && '-'}
                     </td>
-                    <td className="px-6 py-4">
-                      <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
+                    <td className="px-3 py-1.5">
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
                         c.active === false ? 'bg-gray-200 text-gray-600' : 'bg-green-100 text-green-800'
                       }`}>
                         {c.active === false ? '無効' : '有効'}
                       </span>
                     </td>
-                    <td className="px-6 py-4 space-x-2 whitespace-nowrap">
+                    <td className="px-3 py-1.5 space-x-2 whitespace-nowrap">
                       <button
                         onClick={() => { setEditingCustomer(c); setShowCustomerModal(true); }}
-                        className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-1 px-3 rounded text-sm transition"
+                        className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-0.5 px-2 rounded text-xs transition"
                       >
                         編集
                       </button>
                       <button
                         onClick={() => handleDeleteCustomer(c)}
-                        className="bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-3 rounded text-sm transition"
+                        className="bg-red-500 hover:bg-red-600 text-white font-bold py-0.5 px-2 rounded text-xs transition"
                       >
                         削除
                       </button>
@@ -436,6 +452,7 @@ export default function MasterDataManagement() {
                   {typeof p.cleaningPrice === 'number' && <p>💰 請求 ¥{p.cleaningPrice.toLocaleString()}</p>}
                   {typeof p.outsourceAmount === 'number' && <p>🤝 委託 ¥{p.outsourceAmount.toLocaleString()}</p>}
                   {p.address && <p>📍 {p.address}</p>}
+                  <p>🏢 {p.vendorId ? (vendorNameById[p.vendorId] || '不明な業者') : '直営（未割当）'}</p>
                 </div>
                 <div className="flex flex-wrap gap-2 pt-1">
                   <button
@@ -462,49 +479,53 @@ export default function MasterDataManagement() {
 
           {/* デスクトップ：テーブル表示 */}
           <div className="hidden md:block overflow-x-auto">
-            <table className="w-full min-w-[960px]">
+            <table className="w-full min-w-[880px]">
               <thead className="bg-gray-100 border-b-2 border-gray-300">
                 <tr>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">物件名</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">顧客</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">清掃単価（請求）</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">委託金額（支払）</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">住所</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">状態</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">操作</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">物件名</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">顧客</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">担当業者</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">清掃単価（請求）</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">委託金額（支払）</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">住所</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">状態</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">操作</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredProperties.map((p) => (
                   <tr key={p.name} className="border-b hover:bg-gray-50">
-                    <td className="px-6 py-4 text-gray-800 font-semibold">{p.name}</td>
-                    <td className="px-6 py-4 text-gray-600 text-sm">
+                    <td className="px-3 py-1.5 text-gray-800 font-semibold max-w-[9rem] truncate" title={p.name}>{p.name}</td>
+                    <td className="px-3 py-1.5 text-gray-600 text-sm max-w-[7rem] truncate" title={p.customerId ? (customerNameById[p.customerId] || p.customerId) : ''}>
                       {p.customerId ? (customerNameById[p.customerId] || p.customerId) : '-'}
                     </td>
-                    <td className="px-6 py-4 text-gray-800 text-sm">
+                    <td className="px-3 py-1.5 text-gray-600 text-sm max-w-[7rem] truncate">
+                      {p.vendorId ? (vendorNameById[p.vendorId] || '不明な業者') : '直営'}
+                    </td>
+                    <td className="px-3 py-1.5 text-gray-800 text-sm whitespace-nowrap">
                       {typeof p.cleaningPrice === 'number' ? `¥${p.cleaningPrice.toLocaleString()}` : '-'}
                     </td>
-                    <td className="px-6 py-4 text-gray-800 text-sm">
+                    <td className="px-3 py-1.5 text-gray-800 text-sm whitespace-nowrap">
                       {typeof p.outsourceAmount === 'number' ? `¥${p.outsourceAmount.toLocaleString()}` : '-'}
                     </td>
-                    <td className="px-6 py-4 text-gray-600 text-sm">{p.address || '-'}</td>
-                    <td className="px-6 py-4">
-                      <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
+                    <td className="px-3 py-1.5 text-gray-600 text-sm max-w-[9rem] truncate" title={p.address || ''}>{p.address || '-'}</td>
+                    <td className="px-3 py-1.5">
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
                         p.active === false ? 'bg-gray-200 text-gray-600' : 'bg-green-100 text-green-800'
                       }`}>
                         {p.active === false ? '無効' : '有効'}
                       </span>
                     </td>
-                    <td className="px-6 py-4 space-x-2 whitespace-nowrap">
+                    <td className="px-3 py-1.5 space-x-2 whitespace-nowrap">
                       <button
                         onClick={() => { setEditingProperty(p); setShowPropertyModal(true); }}
-                        className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-1 px-3 rounded text-sm transition"
+                        className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-0.5 px-2 rounded text-xs transition"
                       >
                         編集
                       </button>
                       <button
                         onClick={() => handleDeleteProperty(p)}
-                        className="bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-3 rounded text-sm transition"
+                        className="bg-red-500 hover:bg-red-600 text-white font-bold py-0.5 px-2 rounded text-xs transition"
                       >
                         削除
                       </button>
@@ -566,49 +587,49 @@ export default function MasterDataManagement() {
 
           {/* デスクトップ：テーブル表示 */}
           <div className="hidden md:block overflow-x-auto">
-            <table className="w-full min-w-[760px]">
+            <table className="w-full min-w-[680px]">
               <thead className="bg-gray-100 border-b-2 border-gray-300">
                 <tr>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">従業員ID</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">氏名</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">雇用形態</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">連絡先</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">時給</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">状態</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">操作</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">従業員ID</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">氏名</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">雇用形態</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">連絡先</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">時給</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">状態</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">操作</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredEmployees.map((emp) => (
                   <tr key={emp.id} className="border-b hover:bg-gray-50">
-                    <td className="px-6 py-4 text-gray-500 text-sm font-mono">{emp.id}</td>
-                    <td className="px-6 py-4 text-gray-800 font-semibold">{emp.name}</td>
-                    <td className="px-6 py-4 text-gray-600 text-sm">{emp.employmentType || '-'}</td>
-                    <td className="px-6 py-4 text-gray-600 text-sm">
+                    <td className="px-3 py-1.5 text-gray-500 text-xs font-mono whitespace-nowrap">{emp.id}</td>
+                    <td className="px-3 py-1.5 text-gray-800 font-semibold text-sm max-w-[8rem] truncate" title={emp.name}>{emp.name}</td>
+                    <td className="px-3 py-1.5 text-gray-600 text-sm whitespace-nowrap">{emp.employmentType || '-'}</td>
+                    <td className="px-3 py-1.5 text-gray-600 text-xs max-w-[9rem] truncate">
                       {emp.phone && <span className="block">{emp.phone}</span>}
                       {emp.email && <span className="block">{emp.email}</span>}
                       {!emp.phone && !emp.email && '-'}
                     </td>
-                    <td className="px-6 py-4 text-gray-800 text-sm">
+                    <td className="px-3 py-1.5 text-gray-800 text-sm whitespace-nowrap">
                       {typeof emp.hourlyWage === 'number' ? `¥${emp.hourlyWage.toLocaleString()}` : '-'}
                     </td>
-                    <td className="px-6 py-4">
-                      <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
+                    <td className="px-3 py-1.5">
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
                         emp.active === false ? 'bg-gray-200 text-gray-600' : 'bg-green-100 text-green-800'
                       }`}>
                         {emp.active === false ? '無効' : '有効'}
                       </span>
                     </td>
-                    <td className="px-6 py-4 space-x-2 whitespace-nowrap">
+                    <td className="px-3 py-1.5 space-x-2 whitespace-nowrap">
                       <button
                         onClick={() => { setEditingEmployee(emp); setShowEmployeeModal(true); }}
-                        className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-1 px-3 rounded text-sm transition"
+                        className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-0.5 px-2 rounded text-xs transition"
                       >
                         編集
                       </button>
                       <button
                         onClick={() => handleDeleteEmployee(emp)}
-                        className="bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-3 rounded text-sm transition"
+                        className="bg-red-500 hover:bg-red-600 text-white font-bold py-0.5 px-2 rounded text-xs transition"
                       >
                         削除
                       </button>
@@ -637,6 +658,7 @@ export default function MasterDataManagement() {
         <PropertyModal
           property={editingProperty}
           customers={customers}
+          vendors={vendors}
           existingProperties={properties}
           initialName={propertyPrefillName}
           onClose={() => { setShowPropertyModal(false); setEditingProperty(null); setPropertyPrefillName(''); }}
@@ -707,7 +729,7 @@ function CustomerModal({ customer, onClose }) {
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] flex flex-col">
-        <div className="bg-blue-500 text-white px-6 py-4 flex justify-between items-center flex-shrink-0">
+        <div className="bg-blue-500 text-white px-3 py-1.5 flex justify-between items-center flex-shrink-0">
           <h2 className="text-xl font-bold">{isEdit ? '顧客を編集' : '顧客を追加'}</h2>
           <button onClick={onClose} className="text-white hover:text-gray-200 text-2xl leading-none">×</button>
         </div>
@@ -821,13 +843,14 @@ function CustomerModal({ customer, onClose }) {
   );
 }
 
-function PropertyModal({ property, customers, existingProperties = [], initialName, onClose }) {
+function PropertyModal({ property, customers, vendors = [], existingProperties = [], initialName, onClose }) {
   const isEdit = !!property;
   const [name, setName] = useState(property?.name || initialName || '');
   const [propertyId, setPropertyId] = useState(property?.propertyId || '');
   // 新規作成時のみ自動発番の対象にする。手動で書き換えたら以後は上書きしない。
   const [propertyIdTouched, setPropertyIdTouched] = useState(isEdit);
   const [customerId, setCustomerId] = useState(property?.customerId || '');
+  const [vendorId, setVendorId] = useState(property?.vendorId || '');
 
   // 顧客を選ぶと「顧客ID-連番」（例：shinyo-03）を自動で組み立てる。
   // 既存の物件マスタの命名規則（shinyo-01、earnest-01 等）に合わせている。
@@ -870,6 +893,7 @@ function PropertyModal({ property, customers, existingProperties = [], initialNa
       const data = {
         propertyId: propertyId.trim(),
         customerId: customerId || '',
+        vendorId: vendorId || '',
         cleaningPrice: cleaningPrice !== '' ? parseInt(cleaningPrice, 10) : null,
         outsourceAmount: outsourceAmount !== '' ? parseInt(outsourceAmount, 10) : null,
         address: address.trim(),
@@ -901,7 +925,7 @@ function PropertyModal({ property, customers, existingProperties = [], initialNa
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] flex flex-col">
-        <div className="bg-blue-500 text-white px-6 py-4 flex justify-between items-center flex-shrink-0">
+        <div className="bg-blue-500 text-white px-3 py-1.5 flex justify-between items-center flex-shrink-0">
           <h2 className="text-xl font-bold">{isEdit ? '物件を編集' : '物件を追加'}</h2>
           <button onClick={onClose} className="text-white hover:text-gray-200 text-2xl leading-none">×</button>
         </div>
@@ -938,6 +962,22 @@ function PropertyModal({ property, customers, existingProperties = [], initialNa
             </select>
             <p className="text-xs text-gray-400 mt-1">
               直営（自社運営）の物件も、自社を表す顧客（例：アーネスト）を選んでください。物件IDが同じ形式で発番されます。
+            </p>
+          </div>
+          <div>
+            <label className="block text-gray-700 font-semibold mb-2">担当業者</label>
+            <select
+              value={vendorId}
+              onChange={(e) => setVendorId(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">直営（未割当）</option>
+              {vendors.map((v) => (
+                <option key={v.id} value={v.id}>{v.name}</option>
+              ))}
+            </select>
+            <p className="text-xs text-gray-400 mt-1">
+              「協力業者管理」の物件割り当てと連動しています。どちらの画面で変更しても反映されます。
             </p>
           </div>
           <div>
@@ -1126,7 +1166,7 @@ function EmployeeModal({ employee, onClose }) {
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] flex flex-col">
-        <div className="bg-blue-500 text-white px-6 py-4 flex justify-between items-center flex-shrink-0">
+        <div className="bg-blue-500 text-white px-3 py-1.5 flex justify-between items-center flex-shrink-0">
           <h2 className="text-xl font-bold">{isEdit ? '従業員を編集' : '従業員を追加'}</h2>
           <button onClick={onClose} className="text-white hover:text-gray-200 text-2xl leading-none">×</button>
         </div>

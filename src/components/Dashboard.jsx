@@ -446,10 +446,19 @@ export default function Dashboard({ user, onLogout }) {
               readOnly={isContractor}
               currentUser={user}
               isAdmin={isAdmin}
+              vendors={vendors}
+              propertyAssignments={propertyAssignments}
             />
           )}
 
-          {currentPage === 'schedule' && <Schedule allowedProperties={allowedProperties} />}
+          {currentPage === 'schedule' && (
+            <Schedule
+              allowedProperties={allowedProperties}
+              isAdmin={isAdmin}
+              vendors={vendors}
+              propertyAssignments={propertyAssignments}
+            />
+          )}
 
           {currentPage === 'accounts' && isAdmin && <AccountManagement currentUid={user?.uid} />}
 

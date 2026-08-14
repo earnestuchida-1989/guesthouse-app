@@ -1,5 +1,6 @@
 import { db } from '../firebase';
 import { collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore';
+import { setPropertyAssignment } from './vendorService';
 
 const PROPERTIES_COLLECTION = 'properties';
 const DIRECTORY_COLLECTION = 'propertyDirectory';
@@ -39,22 +40,30 @@ const syncPropertyDirectory = async (propertyName, customerId, customerName, act
 
 // マスタデータ管理画面用：物件を新規作成（doc ID=物件名。作成後は物件名を変更しない運用とする。
 // 予約データ等が物件名の文字列で紐付いているため、リネームすると既存の予約と紐付かなくなる）
+// data.vendorId が渡された場合は propertyAssignments（協力業者アカウントが自分の担当物件を
+// 絞り込むのに使う、読み取り公開のコレクション）にも同期する。properties自体は管理者限定のため。
 export const addProperty = async (propertyName, data, customerName) => {
+  const { vendorId, ...rest } = data;
   await setDoc(doc(db, PROPERTIES_COLLECTION, propertyName), {
-    ...data,
+    ...rest,
+    vendorId: vendorId || null,
     updatedAt: new Date().toISOString(),
   });
   await syncPropertyDirectory(propertyName, data.customerId, customerName, data.active);
+  await setPropertyAssignment(propertyName, vendorId || null);
   return propertyName;
 };
 
 // 既存の物件情報を更新
 export const updateProperty = async (propertyName, data, customerName) => {
+  const { vendorId, ...rest } = data;
   await updateDoc(doc(db, PROPERTIES_COLLECTION, propertyName), {
-    ...data,
+    ...rest,
+    vendorId: vendorId || null,
     updatedAt: new Date().toISOString(),
   });
   await syncPropertyDirectory(propertyName, data.customerId, customerName, data.active);
+  await setPropertyAssignment(propertyName, vendorId || null);
 };
 
 // 物件を削除（物件ディレクトリも合わせて削除。清掃予定・担当割り当ては削除しないので、
