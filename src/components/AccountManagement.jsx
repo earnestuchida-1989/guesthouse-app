@@ -93,7 +93,7 @@ export default function AccountManagement({ currentUid }) {
         <p className="text-gray-600">データ読み込み中...</p>
       ) : (
         <div className="bg-white rounded-lg shadow overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full min-w-[640px]">
             <thead className="bg-gray-100 border-b-2 border-gray-300">
               <tr>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">メールアドレス</th>

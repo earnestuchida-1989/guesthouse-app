@@ -82,13 +82,31 @@ export default function Reservations({ allowedProperties = null, readOnly = fals
     new Set(reservations.map((res) => getCustomerName(res)).filter(Boolean))
   ).sort((a, b) => a.localeCompare(b, 'ja'));
 
+  const statusLabel = (res) =>
+    res.status === 'cancelled'
+      ? 'キャンセル'
+      : res.status === 'no_cleaning_needed'
+      ? '清掃不要'
+      : res.status === 'confirmed'
+      ? '確定'
+      : '待機中';
+
+  const statusClasses = (res) =>
+    res.status === 'cancelled'
+      ? 'bg-gray-200 text-gray-600 line-through'
+      : res.status === 'no_cleaning_needed'
+      ? 'bg-purple-100 text-purple-700'
+      : res.status === 'confirmed'
+      ? 'bg-blue-100 text-blue-800'
+      : 'bg-yellow-100 text-yellow-800';
+
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
         <div>
-          <h1 className="text-3xl font-bold text-gray-800">清掃スケジュール管理</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">清掃スケジュール管理</h1>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           {customerOptions.length > 0 && (
             <select
               value={customerFilter}
@@ -119,8 +137,88 @@ export default function Reservations({ allowedProperties = null, readOnly = fals
           <p className="text-gray-600">データ読み込み中...</p>
         </div>
       ) : (
-        <div className="bg-white rounded-lg shadow overflow-x-auto">
-          <table className="w-full">
+        <div className="bg-white rounded-lg shadow">
+        {/* モバイル：カード表示 */}
+        <div className="md:hidden divide-y divide-gray-200">
+          {sortedReservations.map((res) => (
+            <div
+              key={res.id}
+              className={`p-4 space-y-2 ${res.hasCheckIn ? 'bg-orange-50' : ''}`}
+            >
+              <div className="flex justify-between items-start gap-2">
+                <div className="min-w-0">
+                  <p className="font-semibold text-gray-800 break-words">
+                    {res.propertyName || res.guestName}
+                  </p>
+                  {getCustomerName(res) && (
+                    <p className="text-xs text-gray-500">{getCustomerName(res)}</p>
+                  )}
+                </div>
+                {res.hasCheckIn && (
+                  <span className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold bg-orange-500 text-white whitespace-nowrap">
+                    🔴 イン{res.checkInTime ? ` ${res.checkInTime}` : ''}
+                  </span>
+                )}
+              </div>
+
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-600">
+                <span>📅 {res.cleaningDate || res.checkOut}</span>
+                <span>👥 {res.persons ? `${res.persons}名` : '人数未定'}</span>
+              </div>
+
+              {res.notes && <p className="text-sm text-gray-600">📝 {res.notes}</p>}
+
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <span className={`px-3 py-1 rounded-full text-sm font-semibold ${statusClasses(res)}`}>
+                  {statusLabel(res)}
+                </span>
+                {res.completed ? (
+                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800">
+                    ✅ 完了{res.photoUrls?.length ? `（写真${res.photoUrls.length}枚）` : ''}
+                  </span>
+                ) : (
+                  <span className="text-gray-400 text-xs">未報告</span>
+                )}
+              </div>
+
+              <div className="flex flex-wrap gap-2 pt-1">
+                {canReport && (
+                  <button
+                    onClick={() => handleReport(res)}
+                    className="flex-1 min-w-[7rem] text-sm bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-3 rounded-lg transition"
+                  >
+                    📷 {res.completed ? '報告を編集' : '完了報告する'}
+                  </button>
+                )}
+                {!readOnly && (
+                  <>
+                    <button
+                      onClick={() => handleEdit(res)}
+                      className="flex-1 min-w-[5rem] text-sm bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-3 rounded-lg transition"
+                    >
+                      編集
+                    </button>
+                    <button
+                      onClick={() => handleDelete(res.id)}
+                      className="flex-1 min-w-[5rem] text-sm bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-3 rounded-lg transition"
+                    >
+                      削除
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          ))}
+          {sortedReservations.length === 0 && (
+            <div className="text-center py-12">
+              <p className="text-gray-600">清掃予定がありません</p>
+            </div>
+          )}
+        </div>
+
+        {/* デスクトップ：テーブル表示 */}
+        <div className="hidden md:block overflow-x-auto">
+          <table className="w-full min-w-[900px]">
             <thead className="bg-gray-100 border-b-2 border-gray-300">
               <tr>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">イン</th>
@@ -221,6 +319,7 @@ export default function Reservations({ allowedProperties = null, readOnly = fals
               <p className="text-gray-600">清掃予定がありません</p>
             </div>
           )}
+        </div>
         </div>
       )}
 

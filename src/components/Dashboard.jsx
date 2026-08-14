@@ -11,8 +11,17 @@ import AccountManagement from './AccountManagement';
 import VendorManagement from './VendorManagement';
 import CustomerReports from './CustomerReports';
 
+const NAV_ITEMS = [
+  { key: 'overview', label: '📊 概要' },
+  { key: 'reservations', label: '📅 清掃管理' },
+  { key: 'schedule', label: '🗓️ スケジュール' },
+  { key: 'accounts', label: '👥 アカウント管理', adminOnly: true },
+  { key: 'vendors', label: '🏢 協力業者管理', adminOnly: true },
+];
+
 export default function Dashboard({ user, onLogout }) {
   const [currentPage, setCurrentPage] = useState('overview');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [allReservations, setAllReservations] = useState([]);
   const [propertyAssignments, setPropertyAssignments] = useState({});
   const [propertyMaster, setPropertyMaster] = useState({});
@@ -124,6 +133,25 @@ export default function Dashboard({ user, onLogout }) {
 
   const stats = calculateMonthlyStats();
 
+  const visibleNavItems = NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin);
+
+  const renderNavButton = (item, closeOnClick) => (
+    <button
+      key={item.key}
+      onClick={() => {
+        setCurrentPage(item.key);
+        if (closeOnClick) setMobileMenuOpen(false);
+      }}
+      className={`w-full text-left px-4 py-2 rounded-lg transition ${
+        currentPage === item.key
+          ? 'bg-blue-500 text-white'
+          : 'text-gray-700 hover:bg-gray-100'
+      }`}
+    >
+      {item.label}
+    </button>
+  );
+
   const todayStr = new Date().toISOString().slice(0, 10);
   const activeReservations = reservations.filter(r => r.status !== 'cancelled' && r.status !== 'no_cleaning_needed');
   const todayTasks = activeReservations
@@ -136,17 +164,28 @@ export default function Dashboard({ user, onLogout }) {
     <div className="min-h-screen bg-gray-50">
       <nav className="bg-white shadow-md">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-800">ゲストハウス日程管理</h1>
-            <p className="text-xs text-gray-500 mt-1">
-              {isAdmin ? '🔐 管理者' : isContractor ? '🏢 協力業者' : '👤 スタッフ'}
-            </p>
+          <div className="flex items-center gap-3 min-w-0">
+            <button
+              onClick={() => setMobileMenuOpen(true)}
+              className="md:hidden shrink-0 text-gray-600 hover:text-gray-900 p-1 -ml-1"
+              aria-label="メニューを開く"
+            >
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+            <div className="min-w-0">
+              <h1 className="text-lg sm:text-2xl font-bold text-gray-800 truncate">ゲストハウス日程管理</h1>
+              <p className="text-xs text-gray-500 mt-1">
+                {isAdmin ? '🔐 管理者' : isContractor ? '🏢 協力業者' : '👤 スタッフ'}
+              </p>
+            </div>
           </div>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-600">{user?.email || 'Guest'}</span>
+          <div className="flex items-center gap-2 sm:gap-4">
+            <span className="hidden sm:inline text-sm text-gray-600">{user?.email || 'Guest'}</span>
             <button
               onClick={handleLogout}
-              className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition"
+              className="bg-red-500 hover:bg-red-600 text-white px-3 py-2 sm:px-4 rounded-lg transition text-sm sm:text-base"
             >
               ログアウト
             </button>
@@ -155,66 +194,39 @@ export default function Dashboard({ user, onLogout }) {
       </nav>
 
       <div className="flex">
-        <aside className="w-64 bg-white shadow-md min-h-screen p-6">
+        {/* モバイル用ドロワーメニュー */}
+        {mobileMenuOpen && (
+          <div className="fixed inset-0 z-40 md:hidden">
+            <div
+              className="fixed inset-0 bg-black/40"
+              onClick={() => setMobileMenuOpen(false)}
+            />
+            <aside className="fixed inset-y-0 left-0 w-64 max-w-[80vw] bg-white shadow-lg p-6 overflow-y-auto">
+              <div className="flex justify-between items-center mb-4">
+                <span className="font-bold text-gray-800">メニュー</span>
+                <button
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="text-gray-500 hover:text-gray-800 p-1"
+                  aria-label="メニューを閉じる"
+                >
+                  ✕
+                </button>
+              </div>
+              <nav className="space-y-4">
+                {visibleNavItems.map((item) => renderNavButton(item, true))}
+              </nav>
+            </aside>
+          </div>
+        )}
+
+        {/* デスクトップ用サイドバー */}
+        <aside className="hidden md:block w-64 bg-white shadow-md min-h-screen p-6">
           <nav className="space-y-4">
-            <button
-              onClick={() => setCurrentPage('overview')}
-              className={`w-full text-left px-4 py-2 rounded-lg transition ${
-                currentPage === 'overview'
-                  ? 'bg-blue-500 text-white'
-                  : 'text-gray-700 hover:bg-gray-100'
-              }`}
-            >
-              📊 概要
-            </button>
-            <button
-              onClick={() => setCurrentPage('reservations')}
-              className={`w-full text-left px-4 py-2 rounded-lg transition ${
-                currentPage === 'reservations'
-                  ? 'bg-blue-500 text-white'
-                  : 'text-gray-700 hover:bg-gray-100'
-              }`}
-            >
-              📅 清掃管理
-            </button>
-            <button
-              onClick={() => setCurrentPage('schedule')}
-              className={`w-full text-left px-4 py-2 rounded-lg transition ${
-                currentPage === 'schedule'
-                  ? 'bg-blue-500 text-white'
-                  : 'text-gray-700 hover:bg-gray-100'
-              }`}
-            >
-              🗓️ スケジュール
-            </button>
-            {isAdmin && (
-              <button
-                onClick={() => setCurrentPage('accounts')}
-                className={`w-full text-left px-4 py-2 rounded-lg transition ${
-                  currentPage === 'accounts'
-                    ? 'bg-blue-500 text-white'
-                    : 'text-gray-700 hover:bg-gray-100'
-                }`}
-              >
-                👥 アカウント管理
-              </button>
-            )}
-            {isAdmin && (
-              <button
-                onClick={() => setCurrentPage('vendors')}
-                className={`w-full text-left px-4 py-2 rounded-lg transition ${
-                  currentPage === 'vendors'
-                    ? 'bg-blue-500 text-white'
-                    : 'text-gray-700 hover:bg-gray-100'
-                }`}
-              >
-                🏢 協力業者管理
-              </button>
-            )}
+            {visibleNavItems.map((item) => renderNavButton(item, false))}
           </nav>
         </aside>
 
-        <main className="flex-1 p-8">
+        <main className="flex-1 p-4 sm:p-6 md:p-8 min-w-0">
           {currentPage === 'overview' && (
             <div>
               <h2 className="text-3xl font-bold text-gray-800 mb-6">📊 ダッシュボード</h2>
