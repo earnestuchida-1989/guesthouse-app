@@ -219,6 +219,7 @@ export default function AccountManagement({ currentUid }) {
             <h3 className="text-xl font-bold text-gray-800 mb-4">✅ パスワードを発行しました</h3>
             <p className="text-sm text-gray-600 mb-4">
               このパスワードは今だけ表示されます。本人に安全な方法（口頭・LINEなど）で伝えてください。
+              初回ログイン時に、本人が自分で新しいパスワードを設定するよう求められます。
             </p>
             <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4 space-y-2">
               <p className="text-sm text-gray-500">メールアドレス</p>

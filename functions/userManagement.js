@@ -75,6 +75,9 @@ function makeCreateStaffAccount(db) {
       // ロールを問わず任意で設定可能（管理者が自分の従業員レコードを持つ場合もあるため）。
       employeeId: employeeId || null,
       active: true,
+      // 初回ログイン時に必ず自分でパスワードを設定し直させる
+      // （管理者が発行した一時パスワードを使い続けるのを防ぐため）
+      mustChangePassword: true,
       createdAt: new Date().toISOString(),
       createdBy: request.auth.uid,
     });
@@ -186,12 +189,31 @@ function makeResetUserPassword(db) {
       throw new HttpsError('not-found', err.message);
     }
 
+    // 再発行した一時パスワードも、次回ログイン時に必ず本人に変更してもらう
+    await db.collection('users').doc(uid).update({ mustChangePassword: true });
+
     return { uid, email: userRecord.email, tempPassword };
+  });
+}
+
+/**
+ * ログイン中の本人が新しいパスワードを設定し終えたことを記録する（自己申告、誰でも自分の分だけ実行可）。
+ * パスワード自体の変更はクライアント側でFirebase Authの updatePassword を使って行い、
+ * 成功したらこの関数を呼んで users ドキュメントの mustChangePassword フラグを下ろす。
+ */
+function makeClearMustChangePassword(db) {
+  return onCall({ region: 'asia-northeast1' }, async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'ログインが必要です');
+    }
+    await db.collection('users').doc(request.auth.uid).update({ mustChangePassword: false });
+    return { ok: true };
   });
 }
 
 module.exports = {
   makeCreateStaffAccount,
+  makeClearMustChangePassword,
   makeSetUserRole,
   makeSetUserEmployeeLink,
   makeSetUserActive,

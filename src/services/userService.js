@@ -50,3 +50,9 @@ export const resetUserPassword = async (uid) => {
   const res = await fn({ uid });
   return res.data; // { uid, email, tempPassword }
 };
+
+// 初回ログイン時のパスワード変更完了を記録（本人のみ、自分の分だけ実行可）
+export const clearMustChangePassword = async () => {
+  const fn = httpsCallable(functions, 'clearMustChangePassword');
+  await fn();
+};

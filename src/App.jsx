@@ -4,6 +4,7 @@ import { auth } from './firebase';
 import { getUserDoc } from './services/userService';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
+import ChangePasswordScreen from './components/ChangePasswordScreen';
 
 const BOOTSTRAP_ADMIN_EMAIL = 'admin@guesthouse.local';
 
@@ -36,6 +37,7 @@ export default function App() {
           role: userDoc?.role || 'staff',
           vendorId: userDoc?.vendorId || null,
           customerId: userDoc?.customerId || null,
+          mustChangePassword: userDoc?.mustChangePassword || false,
         });
       } catch (e) {
         console.error('ユーザー情報取得エラー:', e);
@@ -79,6 +81,16 @@ export default function App() {
 
   if (!user) {
     return <Login onLoginSuccess={() => setManualLogout(false)} />;
+  }
+
+  if (user.mustChangePassword) {
+    return (
+      <ChangePasswordScreen
+        user={user}
+        onDone={() => setUser((prev) => ({ ...prev, mustChangePassword: false }))}
+        onLogout={handleLogout}
+      />
+    );
   }
 
   return <Dashboard user={user} onLogout={handleLogout} />;

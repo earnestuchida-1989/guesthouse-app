@@ -9,6 +9,7 @@ const { syncAllSheets } = require('./sheetSync');
 const { verifySignature, processLineEvents } = require('./lineWebhook');
 const {
   makeCreateStaffAccount,
+  makeClearMustChangePassword,
   makeSetUserRole,
   makeSetUserEmployeeLink,
   makeSetUserActive,
@@ -20,6 +21,7 @@ initializeApp();
 const db = getFirestore();
 
 exports.createStaffAccount = makeCreateStaffAccount(db);
+exports.clearMustChangePassword = makeClearMustChangePassword(db);
 exports.setUserRole = makeSetUserRole(db);
 exports.setUserEmployeeLink = makeSetUserEmployeeLink(db);
 exports.setUserActive = makeSetUserActive(db);
