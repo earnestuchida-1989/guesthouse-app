@@ -61,6 +61,16 @@ export default function Dashboard({ user, onLogout }) {
     return PROPERTY_PRICES[propertyName] || 5000;
   };
 
+  // 委託金額（協力業者への実際の支払額）が物件マスタに登録されていればそれを使う。
+  // 未登録の物件は、従来通り請求額に一律のコスト率をかけた概算値にフォールバックする。
+  const getPropertyCost = (propertyName, price) => {
+    const master = propertyMaster[propertyName];
+    if (master && typeof master.outsourceAmount === 'number') {
+      return master.outsourceAmount;
+    }
+    return price * COST_RATIO;
+  };
+
   // 協力業者アカウントは、自社が担当する物件のみに絞り込む
   const allowedProperties = isContractor
     ? Object.entries(propertyAssignments)
@@ -142,9 +152,10 @@ export default function Dashboard({ user, onLogout }) {
       try {
         const resDate = new Date(res.cleaningDate || res.checkOut);
         if (resDate.getMonth() === currentMonth && resDate.getFullYear() === currentYear && res.status === 'confirmed') {
-          const price = getPropertyPrice(res.propertyName || res.guestName);
+          const propertyName = res.propertyName || res.guestName;
+          const price = getPropertyPrice(propertyName);
           totalRevenue += price;
-          totalCost += price * COST_RATIO;
+          totalCost += getPropertyCost(propertyName, price);
           completedCount += 1;
         }
       } catch (e) {

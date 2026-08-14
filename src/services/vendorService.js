@@ -20,13 +20,13 @@ export const onVendorsChange = (callback) => {
   });
 };
 
-// 協力業者を追加
-export const addVendor = async ({ name, color }) => {
+// 協力業者を追加（マスタデータ管理と同じ項目構成。name以外は任意）
+export const addVendor = async (data) => {
   const ref = doc(collection(db, VENDORS_COLLECTION));
   await setDoc(ref, {
-    name,
-    color: color || '#6366F1',
+    color: '#6366F1',
     active: true,
+    ...data,
     createdAt: new Date().toISOString(),
   });
   return ref.id;
@@ -42,7 +42,9 @@ export const deleteVendor = async (vendorId) => {
   await deleteDoc(doc(db, VENDORS_COLLECTION, vendorId));
 };
 
-// 物件ごとの担当業者割り当てをリアルタイム監視
+// 物件ごとの担当業者割り当てをリアルタイム監視。
+// 委託金額は業者×物件の組み合わせではなく、物件マスタ（properties.outsourceAmount）側で管理する
+// （マスタデータ管理画面から編集）。
 // 戻り値: { [propertyName]: vendorId }
 export const onPropertyAssignmentsChange = (callback) => {
   return onSnapshot(collection(db, ASSIGNMENTS_COLLECTION), (snapshot) => {
@@ -67,9 +69,5 @@ export const getAllPropertyAssignments = async () => {
 // 物件の担当業者を設定（vendorId=nullで未割当に戻す）
 export const setPropertyAssignment = async (propertyName, vendorId) => {
   const ref = doc(db, ASSIGNMENTS_COLLECTION, propertyName);
-  if (!vendorId) {
-    await setDoc(ref, { vendorId: null, updatedAt: new Date().toISOString() });
-  } else {
-    await setDoc(ref, { vendorId, updatedAt: new Date().toISOString() });
-  }
+  await setDoc(ref, { vendorId: vendorId || null, updatedAt: new Date().toISOString() });
 };

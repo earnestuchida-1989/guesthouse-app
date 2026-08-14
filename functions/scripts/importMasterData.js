@@ -169,11 +169,14 @@ async function importProperties(token, workbook, customerNameById) {
     }));
     count++;
 
-    // 物件ディレクトリ（物件名→顧客名の軽量コピー）も同時に更新。
-    // properties自体は管理者専用のため、スタッフ・協力業者が「同名の物件」を区別するのに使う。
+    // 物件ディレクトリ（物件名→顧客名・有効状態の軽量コピー）も同時に更新。
+    // properties自体は管理者専用のため、スタッフ・協力業者が「同名の物件」を区別したり、
+    // 清掃予定の物件選択リストに使うのに用いる。
+    const isActive = toActive(col(headers, row, '有効/無効'));
     await firestoreSet(token, 'propertyDirectory', propertyName, buildFields({
       customerId: customerId || '',
       customerName: customerId ? (customerNameById[customerId] || customerId) : '',
+      active: isActive,
       updatedAt: new Date().toISOString(),
     }));
 

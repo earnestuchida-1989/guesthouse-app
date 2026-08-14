@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { onReservationsChange } from '../services/reservationService';
+import { onPropertyDirectoryChange } from '../services/propertyDirectoryService';
 
 function toDateStr(y, m, d) {
   return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
@@ -11,6 +12,7 @@ export default function Schedule({ allowedProperties = null }) {
     return new Date(now.getFullYear(), now.getMonth());
   });
   const [reservations, setReservations] = useState([]);
+  const [propertyDirectory, setPropertyDirectory] = useState({});
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState(null);
 
@@ -22,8 +24,18 @@ export default function Schedule({ allowedProperties = null }) {
       setReservations(filtered);
       setLoading(false);
     });
-    return unsubscribe;
+    const unsubDirectory = onPropertyDirectoryChange(setPropertyDirectory);
+    return () => {
+      unsubscribe();
+      unsubDirectory();
+    };
   }, [allowedProperties]);
+
+  // 「桜」「櫻」のような同名・紛らわしい物件名を、顧客名付きで区別できるようにする
+  const getCustomerName = (res) => {
+    const name = res.propertyName || res.guestName;
+    return propertyDirectory[name]?.customerName || '';
+  };
 
   const daysInMonth = (date) => new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
   const firstDayOfMonth = (date) => new Date(date.getFullYear(), date.getMonth(), 1).getDay();
@@ -196,7 +208,12 @@ export default function Schedule({ allowedProperties = null }) {
                       </span>
                     )}
                   </p>
-                  <p className="font-semibold text-gray-800">{r.propertyName || r.guestName}</p>
+                  <p className="font-semibold text-gray-800">
+                    {r.propertyName || r.guestName}
+                    {getCustomerName(r) && (
+                      <span className="ml-1 font-normal text-xs text-gray-500">（{getCustomerName(r)}）</span>
+                    )}
+                  </p>
                   <p className="text-xs text-gray-500">
                     {r.persons ? `${r.persons}名` : '人数未定'}
                     {r.status === 'no_cleaning_needed' ? '・清掃不要' : ''}

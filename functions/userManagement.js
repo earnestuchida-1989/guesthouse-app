@@ -36,7 +36,7 @@ function makeCreateStaffAccount(db) {
     }
     await assertIsAdmin(db, request.auth.uid);
 
-    const { email, displayName, role, vendorId, customerId } = request.data || {};
+    const { email, displayName, role, vendorId, customerId, employeeId } = request.data || {};
     if (!email || !role) {
       throw new HttpsError('invalid-argument', 'email と role は必須です');
     }
@@ -71,6 +71,9 @@ function makeCreateStaffAccount(db) {
       role,
       vendorId: role === 'contractor' ? vendorId : null,
       customerId: role === 'customer' ? customerId : null,
+      // 従業員マスタとの紐付け（社員/アルバイトの連絡先・時給等を一元管理するため）。
+      // ロールを問わず任意で設定可能（管理者が自分の従業員レコードを持つ場合もあるため）。
+      employeeId: employeeId || null,
       active: true,
       createdAt: new Date().toISOString(),
       createdBy: request.auth.uid,
@@ -107,6 +110,27 @@ function makeSetUserRole(db) {
       vendorId: role === 'contractor' ? vendorId : null,
       customerId: role === 'customer' ? customerId : null,
     });
+    return { ok: true };
+  });
+}
+
+/**
+ * ユーザーと従業員マスタの紐付けを設定/解除する（管理者専用）。
+ * ロール変更とは独立させ、いつでも単独で付け外しできるようにしている。
+ */
+function makeSetUserEmployeeLink(db) {
+  return onCall({ region: 'asia-northeast1' }, async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'ログインが必要です');
+    }
+    await assertIsAdmin(db, request.auth.uid);
+
+    const { uid, employeeId } = request.data || {};
+    if (!uid) {
+      throw new HttpsError('invalid-argument', 'uid は必須です');
+    }
+
+    await db.collection('users').doc(uid).update({ employeeId: employeeId || null });
     return { ok: true };
   });
 }
@@ -169,6 +193,7 @@ function makeResetUserPassword(db) {
 module.exports = {
   makeCreateStaffAccount,
   makeSetUserRole,
+  makeSetUserEmployeeLink,
   makeSetUserActive,
   makeResetUserPassword,
 };

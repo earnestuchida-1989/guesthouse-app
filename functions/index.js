@@ -10,6 +10,7 @@ const { verifySignature, processLineEvents } = require('./lineWebhook');
 const {
   makeCreateStaffAccount,
   makeSetUserRole,
+  makeSetUserEmployeeLink,
   makeSetUserActive,
   makeResetUserPassword,
 } = require('./userManagement');
@@ -20,6 +21,7 @@ const db = getFirestore();
 
 exports.createStaffAccount = makeCreateStaffAccount(db);
 exports.setUserRole = makeSetUserRole(db);
+exports.setUserEmployeeLink = makeSetUserEmployeeLink(db);
 exports.setUserActive = makeSetUserActive(db);
 exports.resetUserPassword = makeResetUserPassword(db);
 exports.getMyCustomerReports = makeGetMyCustomerReports(db);

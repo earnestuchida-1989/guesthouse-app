@@ -20,9 +20,9 @@ export const getUserDoc = async (uid) => {
 };
 
 // 新規スタッフ/管理者/協力業者/顧客アカウントを作成（管理者専用、Cloud Function経由）
-export const createStaffAccount = async ({ email, displayName, role, vendorId, customerId }) => {
+export const createStaffAccount = async ({ email, displayName, role, vendorId, customerId, employeeId }) => {
   const fn = httpsCallable(functions, 'createStaffAccount');
-  const res = await fn({ email, displayName, role, vendorId, customerId });
+  const res = await fn({ email, displayName, role, vendorId, customerId, employeeId });
   return res.data; // { uid, email, tempPassword }
 };
 
@@ -30,6 +30,12 @@ export const createStaffAccount = async ({ email, displayName, role, vendorId, c
 export const setUserRole = async (uid, role, vendorId, customerId) => {
   const fn = httpsCallable(functions, 'setUserRole');
   await fn({ uid, role, vendorId, customerId });
+};
+
+// 従業員マスタとの紐付けを設定/解除（管理者専用）
+export const setUserEmployeeLink = async (uid, employeeId) => {
+  const fn = httpsCallable(functions, 'setUserEmployeeLink');
+  await fn({ uid, employeeId });
 };
 
 // 有効/無効切り替え（管理者専用）

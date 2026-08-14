@@ -26,11 +26,13 @@ export const propertyExists = async (propertyName) => {
   return snap.exists();
 };
 
-// propertyDirectory（物件名→顧客名の軽量コピー、スタッフ・協力業者も読める）を同期更新
-const syncPropertyDirectory = async (propertyName, customerId, customerName) => {
+// propertyDirectory（物件名→顧客名・有効状態の軽量コピー、スタッフ・協力業者も読める）を同期更新。
+// 清掃予定作成の物件選択リストなど、properties（管理者限定）を直接読めない画面はこちらを使う。
+const syncPropertyDirectory = async (propertyName, customerId, customerName, active) => {
   await setDoc(doc(db, DIRECTORY_COLLECTION, propertyName), {
     customerId: customerId || '',
     customerName: customerId ? (customerName || customerId) : '',
+    active: active !== false,
     updatedAt: new Date().toISOString(),
   });
 };
@@ -42,7 +44,7 @@ export const addProperty = async (propertyName, data, customerName) => {
     ...data,
     updatedAt: new Date().toISOString(),
   });
-  await syncPropertyDirectory(propertyName, data.customerId, customerName);
+  await syncPropertyDirectory(propertyName, data.customerId, customerName, data.active);
   return propertyName;
 };
 
@@ -52,7 +54,7 @@ export const updateProperty = async (propertyName, data, customerName) => {
     ...data,
     updatedAt: new Date().toISOString(),
   });
-  await syncPropertyDirectory(propertyName, data.customerId, customerName);
+  await syncPropertyDirectory(propertyName, data.customerId, customerName, data.active);
 };
 
 // 物件を削除（物件ディレクトリも合わせて削除。清掃予定・担当割り当ては削除しないので、

@@ -3,11 +3,13 @@ import {
   onUsersChange,
   createStaffAccount,
   setUserRole,
+  setUserEmployeeLink,
   setUserActive,
   resetUserPassword,
 } from '../services/userService';
 import { onVendorsChange } from '../services/vendorService';
 import { onCustomersChange, addCustomer } from '../services/customerService';
+import { onEmployeesChange } from '../services/employeeService';
 
 const ROLE_LABELS = {
   admin: '🔐 管理者',
@@ -20,10 +22,12 @@ export default function AccountManagement({ currentUid }) {
   const [users, setUsers] = useState([]);
   const [vendors, setVendors] = useState([]);
   const [customers, setCustomers] = useState([]);
+  const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [newAccountResult, setNewAccountResult] = useState(null);
   const [resettingUid, setResettingUid] = useState(null);
+  const [linkingUser, setLinkingUser] = useState(null);
 
   useEffect(() => {
     const unsubscribe = onUsersChange((data) => {
@@ -32,15 +36,18 @@ export default function AccountManagement({ currentUid }) {
     });
     const unsubVendors = onVendorsChange((data) => setVendors(data));
     const unsubCustomers = onCustomersChange((data) => setCustomers(data));
+    const unsubEmployees = onEmployeesChange((data) => setEmployees(data));
     return () => {
       unsubscribe();
       unsubVendors();
       unsubCustomers();
+      unsubEmployees();
     };
   }, []);
 
   const vendorNameById = Object.fromEntries(vendors.map((v) => [v.id, v.name]));
   const customerNameById = Object.fromEntries(customers.map((c) => [c.id, c.name]));
+  const employeeNameById = Object.fromEntries(employees.map((e) => [e.id, e.name]));
 
   const handleRoleToggle = async (u) => {
     // 管理者⇄スタッフの簡易切替（協力業者への変更は招待時のみ、複雑化を避けるため）
@@ -61,6 +68,15 @@ export default function AccountManagement({ currentUid }) {
       await setUserActive(u.id, nextActive);
     } catch (err) {
       alert('変更に失敗しました: ' + err.message);
+    }
+  };
+
+  const handleSaveEmployeeLink = async (uid, employeeId) => {
+    try {
+      await setUserEmployeeLink(uid, employeeId || null);
+      setLinkingUser(null);
+    } catch (err) {
+      alert('紐付けの変更に失敗しました: ' + err.message);
     }
   };
 
@@ -93,7 +109,7 @@ export default function AccountManagement({ currentUid }) {
         <p className="text-gray-600">データ読み込み中...</p>
       ) : (
         <div className="bg-white rounded-lg shadow overflow-x-auto">
-          <table className="w-full min-w-[640px]">
+          <table className="w-full min-w-[820px]">
             <thead className="bg-gray-100 border-b-2 border-gray-300">
               <tr>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">メールアドレス</th>
@@ -132,6 +148,11 @@ export default function AccountManagement({ currentUid }) {
                         {customerNameById[u.customerId] || '不明な顧客'}
                       </span>
                     )}
+                    {u.employeeId && (
+                      <span className="block text-xs text-gray-500 mt-1">
+                        👷 {employeeNameById[u.employeeId] || '不明な従業員'}
+                      </span>
+                    )}
                   </td>
                   <td className="px-6 py-4">
                     <span
@@ -148,6 +169,12 @@ export default function AccountManagement({ currentUid }) {
                       className="bg-purple-500 hover:bg-purple-600 text-white font-bold py-1 px-3 rounded text-sm transition"
                     >
                       権限切替
+                    </button>
+                    <button
+                      onClick={() => setLinkingUser(u)}
+                      className="bg-teal-500 hover:bg-teal-600 text-white font-bold py-1 px-3 rounded text-sm transition"
+                    >
+                      従業員紐付け
                     </button>
                     <button
                       onClick={() => handleResetPassword(u)}
@@ -208,6 +235,78 @@ export default function AccountManagement({ currentUid }) {
           </div>
         </div>
       )}
+
+      {linkingUser && (
+        <LinkEmployeeModal
+          user={linkingUser}
+          employees={employees}
+          onSave={handleSaveEmployeeLink}
+          onClose={() => setLinkingUser(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function LinkEmployeeModal({ user, employees, onSave, onClose }) {
+  const [employeeId, setEmployeeId] = useState(user.employeeId || '');
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    await onSave(user.id, employeeId);
+    setSaving(false);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-sm w-full">
+        <div className="bg-teal-500 text-white px-6 py-4 flex justify-between items-center">
+          <h2 className="text-lg font-bold">従業員マスタと紐付け</h2>
+          <button onClick={onClose} className="text-white hover:text-gray-200 text-2xl leading-none">×</button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <p className="text-sm text-gray-600">{user.email}</p>
+          <div>
+            <label className="block text-gray-700 font-semibold mb-2">従業員</label>
+            <select
+              value={employeeId}
+              onChange={(e) => setEmployeeId(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">紐付けない</option>
+              {employees.map((emp) => (
+                <option key={emp.id} value={emp.id}>
+                  {emp.name}
+                </option>
+              ))}
+            </select>
+            {employees.length === 0 && (
+              <p className="text-xs text-orange-600 mt-2">
+                従業員が未登録です。先に「マスタデータ管理」の従業員マスタで登録してください。
+              </p>
+            )}
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg transition"
+              disabled={saving}
+            >
+              キャンセル
+            </button>
+            <button
+              type="submit"
+              className="flex-1 bg-teal-500 hover:bg-teal-600 disabled:bg-gray-400 text-white font-bold py-2 px-4 rounded-lg transition"
+              disabled={saving}
+            >
+              {saving ? '保存中...' : '保存'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
@@ -222,15 +321,19 @@ function InviteModal({ onClose, onCreated }) {
   const [customers, setCustomers] = useState([]);
   const [newCustomerName, setNewCustomerName] = useState('');
   const [addingCustomer, setAddingCustomer] = useState(false);
+  const [employeeId, setEmployeeId] = useState('');
+  const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
     const unsub = onVendorsChange((data) => setVendors(data.filter((v) => v.active !== false)));
     const unsubCustomers = onCustomersChange((data) => setCustomers(data.filter((c) => c.active !== false)));
+    const unsubEmployees = onEmployeesChange((data) => setEmployees(data.filter((e) => e.active !== false)));
     return () => {
       unsub();
       unsubCustomers();
+      unsubEmployees();
     };
   }, []);
 
@@ -268,6 +371,7 @@ function InviteModal({ onClose, onCreated }) {
         role,
         vendorId: role === 'contractor' ? vendorId : undefined,
         customerId: role === 'customer' ? customerId : undefined,
+        employeeId: employeeId || undefined,
       });
       onCreated(result);
     } catch (err) {
@@ -382,6 +486,26 @@ function InviteModal({ onClose, onCreated }) {
                   協力業者が未登録です。先に「協力業者管理」画面で業者を登録してください。
                 </p>
               )}
+            </div>
+          )}
+          {(role === 'staff' || role === 'admin') && (
+            <div>
+              <label className="block text-gray-700 font-semibold mb-2">従業員（任意）</label>
+              <select
+                value={employeeId}
+                onChange={(e) => setEmployeeId(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">紐付けない</option>
+                {employees.map((emp) => (
+                  <option key={emp.id} value={emp.id}>
+                    {emp.name}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-400 mt-1">
+                「マスタデータ管理」の従業員マスタと紐付けると、連絡先・時給などを一元管理できます。後からも変更できます。
+              </p>
             </div>
           )}
           <div className="flex gap-3 pt-4">

@@ -36,9 +36,12 @@ service cloud.firestore {
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
+    // 協力業者マスタ: 銀行口座番号など機微な情報を含むため、物件マスタ同様に管理者限定。
+    // スタッフ・協力業者が必要とする「担当業者の色分け」等の情報を含まないため、
+    // 一般ロールからの読み取りは不要（実際に onVendorsChange を使うのは
+    // AccountManagement.jsx / VendorManagement.jsx の管理者専用画面のみ）。
     match /vendors/{vendorId} {
-      allow read: if request.auth != null;
-      allow write: if isAdmin();
+      allow read, write: if isAdmin();
     }
     match /propertyAssignments/{propertyId} {
       allow read: if request.auth != null;
@@ -66,9 +69,11 @@ service cloud.firestore {
       allow read: if request.auth != null;
       allow write: if isAdmin();
     }
+    // 従業員マスタ: 銀行口座番号など機微な情報を含むため、協力業者マスタ同様に管理者限定。
+    // スタッフ本人が自分の情報を見る用途は現状なく、実際に読むのは
+    // AccountManagement.jsx（アカウント作成時の紐付け選択）等の管理者専用画面のみ。
     match /employees/{employeeId} {
-      allow read: if request.auth != null;
-      allow write: if isAdmin();
+      allow read, write: if isAdmin();
     }
   }
 }

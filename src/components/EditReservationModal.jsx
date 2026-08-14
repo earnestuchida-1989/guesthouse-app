@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { updateReservation } from '../services/reservationService';
-import { PROPERTIES } from '../data/properties';
+import { onPropertyDirectoryChange } from '../services/propertyDirectoryService';
+import { buildPropertyOptions } from '../utils/propertyOptions';
 
 export default function EditReservationModal({ reservation, onClose, onReservationUpdated }) {
   const [formData, setFormData] = useState({
@@ -12,8 +13,15 @@ export default function EditReservationModal({ reservation, onClose, onReservati
     hasCheckIn: reservation.hasCheckIn || false,
     checkInTime: reservation.checkInTime || ''
   });
+  const [propertyDirectory, setPropertyDirectory] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => onPropertyDirectoryChange(setPropertyDirectory), []);
+
+  // 現在この予約に設定されている物件名は、マスタ未登録・無効化されていても
+  // 選択肢から消えないようにする（気づかず別物件に変わってしまう事故を防ぐ）
+  const propertyOptions = buildPropertyOptions(propertyDirectory, [formData.propertyName]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -70,8 +78,8 @@ export default function EditReservationModal({ reservation, onClose, onReservati
               required
             >
               <option value="">選択してください</option>
-              {PROPERTIES.map(prop => (
-                <option key={prop} value={prop}>{prop}</option>
+              {propertyOptions.map(opt => (
+                <option key={opt.name} value={opt.name}>{opt.label}</option>
               ))}
             </select>
           </div>

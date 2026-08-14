@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { addReservation } from '../services/reservationService';
-import { PROPERTIES } from '../data/properties';
+import { onPropertyDirectoryChange } from '../services/propertyDirectoryService';
+import { buildPropertyOptions } from '../utils/propertyOptions';
 
 export default function AddReservationModal({ onClose, onReservationAdded }) {
   const [formData, setFormData] = useState({
@@ -12,8 +13,13 @@ export default function AddReservationModal({ onClose, onReservationAdded }) {
     hasCheckIn: false,
     checkInTime: ''
   });
+  const [propertyDirectory, setPropertyDirectory] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => onPropertyDirectoryChange(setPropertyDirectory), []);
+
+  const propertyOptions = buildPropertyOptions(propertyDirectory);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -72,10 +78,15 @@ export default function AddReservationModal({ onClose, onReservationAdded }) {
               required
             >
               <option value="">選択してください</option>
-              {PROPERTIES.map(prop => (
-                <option key={prop} value={prop}>{prop}</option>
+              {propertyOptions.map(opt => (
+                <option key={opt.name} value={opt.name}>{opt.label}</option>
               ))}
             </select>
+            {propertyOptions.length === 0 && (
+              <p className="text-xs text-orange-600 mt-1">
+                選択できる物件がありません。先に「マスタデータ管理」で物件を登録してください。
+              </p>
+            )}
           </div>
 
           <div>
