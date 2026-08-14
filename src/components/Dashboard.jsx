@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase';
 import { onReservationsChange } from '../services/reservationService';
-import { onPropertyAssignmentsChange } from '../services/vendorService';
+import { onPropertyAssignmentsChange, onVendorsChange } from '../services/vendorService';
 import { onPropertiesChange } from '../services/propertyService';
 import { PROPERTY_PRICES, COST_RATIO } from '../data/propertyPrices';
 import Reservations from './Reservations';
@@ -28,6 +28,7 @@ export default function Dashboard({ user, onLogout }) {
   const [allReservations, setAllReservations] = useState([]);
   const [propertyAssignments, setPropertyAssignments] = useState({});
   const [propertyMaster, setPropertyMaster] = useState({});
+  const [vendors, setVendors] = useState([]);
   const isAdmin = user?.role === 'admin';
   const isContractor = user?.role === 'contractor';
   const isCustomer = user?.role === 'customer';
@@ -39,15 +40,17 @@ export default function Dashboard({ user, onLogout }) {
     const unsubAssignments = onPropertyAssignmentsChange((map) => {
       setPropertyAssignments(map);
     });
-    // 物件マスタ（properties）はFirestoreルール上、管理者のみ読み取り可能。
+    // 物件マスタ（properties）・協力業者マスタ（vendors）はFirestoreルール上、管理者のみ読み取り可能。
     // 管理者以外が購読すると permission-denied になるだけなので、管理者の時だけ購読する。
     const unsubProperties = isAdmin
       ? onPropertiesChange((map) => setPropertyMaster(map))
       : null;
+    const unsubVendors = isAdmin ? onVendorsChange((data) => setVendors(data)) : null;
     return () => {
       unsubscribe();
       unsubAssignments();
       if (unsubProperties) unsubProperties();
+      if (unsubVendors) unsubVendors();
     };
   }, [isAdmin]);
 
@@ -170,6 +173,51 @@ export default function Dashboard({ user, onLogout }) {
   };
 
   const stats = calculateMonthlyStats();
+
+  // 業者別・直営別の実績（今月分）。「どの業者/直営がどれだけ清掃を担当し、
+  // クレームが何件あったか」をデータ分析に使えるようにする。
+  // 担当は propertyAssignments（物件→vendorId）を見て判定し、割り当てが無い物件は「直営」扱いにする。
+  const calculateVendorBreakdown = () => {
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    const buckets = {};
+
+    const getBucket = (vendorId) => {
+      const key = vendorId || 'direct';
+      if (!buckets[key]) {
+        const vendor = vendorId ? vendors.find((v) => v.id === vendorId) : null;
+        buckets[key] = {
+          key,
+          label: vendor ? vendor.name : '🏠 直営',
+          color: vendor ? vendor.color : '#64748B',
+          count: 0,
+          complaintCount: 0,
+        };
+      }
+      return buckets[key];
+    };
+
+    reservations.forEach((res) => {
+      if (res.status === 'cancelled') return;
+      let resDate;
+      try {
+        resDate = new Date(res.cleaningDate || res.checkOut);
+        if (resDate.getMonth() !== currentMonth || resDate.getFullYear() !== currentYear) return;
+      } catch (e) {
+        return;
+      }
+      const propertyName = res.propertyName || res.guestName;
+      const vendorId = propertyAssignments[propertyName] || null;
+      const bucket = getBucket(vendorId);
+      bucket.count += 1;
+      if (res.isComplaint) bucket.complaintCount += 1;
+    });
+
+    return Object.values(buckets).sort((a, b) => b.count - a.count);
+  };
+
+  const vendorBreakdown = isAdmin ? calculateVendorBreakdown() : [];
 
   const visibleNavItems = NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin);
 
@@ -319,6 +367,50 @@ export default function Dashboard({ user, onLogout }) {
                       <p className="text-sm text-gray-500 mt-2">利益率: {stats.profitMargin}%</p>
                     </div>
                   </div>
+
+                  {/* 業者別・直営別の実績（今月） */}
+                  <div className="bg-white rounded-lg shadow-md p-6 mt-6">
+                    <h3 className="text-lg font-semibold text-gray-700 mb-4">🏢 業者別・直営別 実績（今月）</h3>
+                    {vendorBreakdown.length === 0 ? (
+                      <p className="text-sm text-gray-500">今月の清掃予定がありません</p>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full min-w-[480px]">
+                          <thead className="border-b-2 border-gray-200">
+                            <tr>
+                              <th className="py-2 text-left text-sm font-semibold text-gray-700">担当</th>
+                              <th className="py-2 text-right text-sm font-semibold text-gray-700">清掃件数</th>
+                              <th className="py-2 text-right text-sm font-semibold text-gray-700">クレーム件数</th>
+                              <th className="py-2 text-right text-sm font-semibold text-gray-700">クレーム率</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {vendorBreakdown.map((b) => (
+                              <tr key={b.key} className="border-b border-gray-100">
+                                <td className="py-2 text-gray-800">
+                                  <span
+                                    className="inline-block w-2.5 h-2.5 rounded-full mr-2"
+                                    style={{ backgroundColor: b.color }}
+                                  />
+                                  {b.label}
+                                </td>
+                                <td className="py-2 text-right text-gray-800">{b.count}</td>
+                                <td className={`py-2 text-right font-semibold ${b.complaintCount > 0 ? 'text-red-600' : 'text-gray-400'}`}>
+                                  {b.complaintCount}
+                                </td>
+                                <td className={`py-2 text-right ${b.complaintCount > 0 ? 'text-red-600' : 'text-gray-400'}`}>
+                                  {b.count > 0 ? `${((b.complaintCount / b.count) * 100).toFixed(1)}%` : '-'}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                    <p className="text-xs text-gray-400 mt-3">
+                      担当は「協力業者管理」の物件割り当てから判定しています。割り当てが無い物件は「直営」として集計されます。クレームは「清掃管理」画面でお客様フィードバックを確認して記録してください。
+                    </p>
+                  </div>
                 </div>
               )}
 
@@ -353,6 +445,7 @@ export default function Dashboard({ user, onLogout }) {
               allowedProperties={allowedProperties}
               readOnly={isContractor}
               currentUser={user}
+              isAdmin={isAdmin}
             />
           )}
 

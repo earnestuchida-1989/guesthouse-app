@@ -302,9 +302,30 @@ function buildGridReservationsForConfig(rows, config) {
     }
   }
 
+  // ステップ1.5: 同じ物件・同じ清掃日に複数のステイが重なった場合は1件にまとめる。
+  // checkoutOffsetDays（結合セルの最終日→翌日を清掃日とする補正）を使うタブでは、
+  // 「前泊の清掃日（結合セルの翌日）」と「次泊の初日（同じ列に単独で入力された1泊）」が
+  // 同じ列＝同じ日付を指してしまい、同日に2件の予約行ができてしまうことがあった
+  // （2026-08-11の菊、2026-08-15の菊・梅で発生）。清掃は1日1回のはずなので統合する。
+  const staysByKey = new Map();
+  for (const stay of stays) {
+    const key = `${stay.propertyName}||${stay.cleaningDate}`;
+    const existing = staysByKey.get(key);
+    if (!existing) {
+      staysByKey.set(key, stay);
+      continue;
+    }
+    staysByKey.set(key, {
+      ...existing,
+      checkInDate: existing.checkInDate || stay.checkInDate,
+      persons: Math.max(existing.persons, stay.persons),
+    });
+  }
+  const dedupedStays = Array.from(staysByKey.values());
+
   // ステップ2: 物件ごとに「あるステイの清掃日 == 別ステイのチェックイン日」ならhasCheckIn=true
   const checkInDatesByProperty = {};
-  for (const stay of stays) {
+  for (const stay of dedupedStays) {
     if (!stay.checkInDate) continue;
     if (!checkInDatesByProperty[stay.propertyName]) {
       checkInDatesByProperty[stay.propertyName] = new Set();
@@ -312,7 +333,7 @@ function buildGridReservationsForConfig(rows, config) {
     checkInDatesByProperty[stay.propertyName].add(stay.checkInDate);
   }
 
-  const reservations = stays
+  const reservations = dedupedStays
     .filter((stay) => stay.cleaningDate >= cutoffDate)
     .map((stay) => {
       const hasCheckIn =

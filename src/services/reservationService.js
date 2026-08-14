@@ -68,6 +68,12 @@ export const updateReservation = async (id, reservationData) => {
   }
 };
 
+// クレーム扱いにする/解除する（管理者がお客様からのフィードバックを確認して判断）。
+// 業者別・直営別のクレーム件数集計（ダッシュボード）に使う。
+export const setComplaintFlag = async (id, isComplaint) => {
+  await updateReservation(id, { isComplaint });
+};
+
 // 予約を削除
 export const deleteReservation = async (id) => {
   try {
