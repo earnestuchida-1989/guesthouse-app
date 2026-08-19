@@ -29,6 +29,20 @@
  *    イン(N)名|イン未定
  *    M/D(曜)
  *    ...（繰り返し）
+ *
+ * 3) 「日付先頭・1行1件」形式（清掃日一覧をまとめて送るタイプ。イン有無・人数は無し）:
+ *    MM.DD　物件名
+ *    MM.DD　物件名②
+ *    MM.DD　物件名　備考（例: ゴミ回収注意）
+ *    ...（日付順に繰り返し、空行で月が区切られることもある）
+ *
+ *    例:
+ *      08.18　五条
+ *      08.20　博多町
+ *      08.28　六条　ゴミ回収注意
+ *
+ *    年は明記されないため、今日から見て過去にならないよう年を解決する
+ *    （resolveMonthDayFuture）。
  */
 
 const DATE_LINE = /^(\d{1,2})\/(\d{1,2})(?:[月火水木金土日])?$/;
@@ -38,6 +52,9 @@ const UNDECIDED_LINE = /^イン未定$/;
 
 // 実際の運用で使われている「1行完結」形式: "9日水インなしイン11名" / "25日金インなしイン未定"
 const COMBINED_DATE_LINE = /^(\d{1,2})日(?:[月火水木金土日])?イン(なし|あり)イン(?:(\d+)\s*名|未定)$/;
+
+// 「日付先頭・1行1件」形式: "08.18　五条" / "08.28　六条　ゴミ回収注意"
+const DAY_FIRST_LINE = /^(\d{1,2})\.(\d{1,2})[\s　]+(.+)$/;
 
 /**
  * 年なし月日("8/5")に、今日から見て最も近い年を推測して付与する
@@ -79,6 +96,42 @@ function resolveDayOnlyDate(day, explicitMonth, now) {
     ? new Date(base.getFullYear(), base.getMonth() + 1, day)
     : thisMonthCandidate;
   return `${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, '0')}-${String(target.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * 月日（年なし）の年を解決する。「MM.DD」形式のように月が明記されている場合に使う
+ * （日のみ省略のresolveDayOnlyDateとは別）。
+ *
+ * 月間の清掃予定表のように、今日から数日前の日付（既に実施済み分）も
+ * 一覧に含まれることがあるため、「今日より前だからといって即座に来年扱い」にはしない。
+ * 60日以上前になる場合のみ「年をまたいで来年の日付」と判断する
+ * （例：12月の予定表を年明け1月に受け取っても、翌年として解決できるように）。
+ */
+function resolveMonthDayFuture(month, day, now) {
+  const base = now || new Date();
+  const todayOnly = new Date(base.getFullYear(), base.getMonth(), base.getDate());
+  const thisYearCandidate = new Date(base.getFullYear(), month - 1, day);
+  const diffDays = (todayOnly - thisYearCandidate) / (1000 * 60 * 60 * 24);
+  const year = diffDays > 60 ? base.getFullYear() + 1 : base.getFullYear();
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+/**
+ * 文字列の先頭がpropertyAliasesのいずれかのキーと一致するか調べ、
+ * 一致すれば { propertyName, rest }（restは残りの文言、前後の空白除去済み）を返す。
+ * 一致しなければnull。
+ */
+function matchPropertyPrefix(str, propertyAliases) {
+  const aliasKeys = Object.keys(propertyAliases || {}).sort((a, b) => b.length - a.length);
+  for (const alias of aliasKeys) {
+    if (alias && str.startsWith(alias)) {
+      return {
+        propertyName: propertyAliases[alias],
+        rest: str.slice(alias.length).replace(/^[\s　]+/, '').trim(),
+      };
+    }
+  }
+  return null;
 }
 
 /**
@@ -135,6 +188,24 @@ function parseLineMessage(text, propertyAliases, now) {
           hasCheckIn: combinedMatch[2] === 'あり',
           persons: personsRaw ? parseInt(personsRaw, 10) : null,
           notes: '',
+        });
+      }
+      continue;
+    }
+
+    // 「日付先頭・1行1件」形式: "08.18　五条" / "08.28　六条　ゴミ回収注意"
+    const dayFirstMatch = line.match(DAY_FIRST_LINE);
+    if (dayFirstMatch) {
+      const month = parseInt(dayFirstMatch[1], 10);
+      const day = parseInt(dayFirstMatch[2], 10);
+      const propMatch = matchPropertyPrefix(dayFirstMatch[3].trim(), propertyAliases);
+      if (propMatch) {
+        results.push({
+          propertyName: propMatch.propertyName,
+          cleaningDate: resolveMonthDayFuture(month, day, now),
+          hasCheckIn: false,
+          persons: null,
+          notes: propMatch.rest || '',
         });
       }
       continue;
@@ -206,4 +277,4 @@ function parseLineMessage(text, propertyAliases, now) {
   return results;
 }
 
-module.exports = { parseLineMessage, normalizeMonthDay, resolveDayOnlyDate };
+module.exports = { parseLineMessage, normalizeMonthDay, resolveDayOnlyDate, resolveMonthDayFuture };
