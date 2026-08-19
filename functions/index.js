@@ -75,10 +75,16 @@ exports.manualSheetSync = onRequest(
 
 // LINE Messaging API Webhook
 // 登録済みの lineConfigs（グループ/ルームID）からのメッセージのみ解析し、reservationsへ反映する
+//
+// minInstances: 1 は必須。しばらく呼び出しが無いとインスタンスが0までスケールダウンし、
+// 次にLINEからメッセージが届いた瞬間にコールドスタートが発生する。LINEのWebhook配信は
+// タイムアウトが短いため、起動が間に合わず「メッセージは届いたのに処理されない」事故に
+// つながる（2026-08-17に実際に発生：3日間呼び出しが無く、直後の配信がタイムアウトした）。
 exports.lineWebhook = onRequest(
   {
     secrets: [LINE_CHANNEL_SECRET, LINE_CHANNEL_ACCESS_TOKEN],
     region: 'asia-northeast1',
+    minInstances: 1,
   },
   async (req, res) => {
     const signature = req.get('x-line-signature');
