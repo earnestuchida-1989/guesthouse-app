@@ -7,6 +7,8 @@ const logger = require('firebase-functions/logger');
 
 const { syncAllSheets } = require('./sheetSync');
 const { verifySignature, processLineEvents } = require('./lineWebhook');
+const { makeParseLineNoteText } = require('./lineNoteImport');
+const { syncAirbnbEmails } = require('./emailSync');
 const {
   makeCreateStaffAccount,
   makeClearMustChangePassword,
@@ -27,11 +29,15 @@ exports.setUserEmployeeLink = makeSetUserEmployeeLink(db);
 exports.setUserActive = makeSetUserActive(db);
 exports.resetUserPassword = makeResetUserPassword(db);
 exports.getMyCustomerReports = makeGetMyCustomerReports(db);
+exports.parseLineNoteText = makeParseLineNoteText(db);
 
 const GOOGLE_SERVICE_ACCOUNT_KEY = defineSecret('GOOGLE_SERVICE_ACCOUNT_KEY');
 const SYNC_SECRET = defineSecret('SYNC_SECRET');
 const LINE_CHANNEL_SECRET = defineSecret('LINE_CHANNEL_SECRET');
 const LINE_CHANNEL_ACCESS_TOKEN = defineSecret('LINE_CHANNEL_ACCESS_TOKEN');
+const GMAIL_OAUTH_CLIENT_ID = defineSecret('GMAIL_OAUTH_CLIENT_ID');
+const GMAIL_OAUTH_CLIENT_SECRET = defineSecret('GMAIL_OAUTH_CLIENT_SECRET');
+const GMAIL_REFRESH_TOKEN = defineSecret('GMAIL_REFRESH_TOKEN');
 
 // 1時間ごとに全アクティブシートを自動同期
 exports.scheduledSheetSync = onSchedule(
@@ -116,6 +122,63 @@ exports.lineWebhook = onRequest(
       logger.error('lineWebhook failed', err);
       // LINE側の再送を避けるため200を返す（エラーはログで確認）
       res.status(200).json({ ok: false, error: err.message });
+    }
+  }
+);
+
+/**
+ * メールでの予約通知取込み（Airbnb予約確定メールをearnest.yoyaku@gmail.comへ転送してもらう運用）
+ * emailConfigs/airbnb ドキュメントの listingAliases（Airbnb掲載名 → 物件マスタの物件名）を参照する。
+ */
+async function runEmailSync(db) {
+  const configDoc = await db.collection('emailConfigs').doc('airbnb').get();
+  const listingAliases = configDoc.exists ? configDoc.data().listingAliases || {} : {};
+  return syncAirbnbEmails(
+    db,
+    {
+      clientId: GMAIL_OAUTH_CLIENT_ID.value(),
+      clientSecret: GMAIL_OAUTH_CLIENT_SECRET.value(),
+      refreshToken: GMAIL_REFRESH_TOKEN.value(),
+    },
+    listingAliases
+  );
+}
+
+// 30分ごとにAirbnb予約メールを自動取込み
+exports.scheduledEmailSync = onSchedule(
+  {
+    schedule: 'every 30 minutes',
+    timeZone: 'Asia/Tokyo',
+    secrets: [GMAIL_OAUTH_CLIENT_ID, GMAIL_OAUTH_CLIENT_SECRET, GMAIL_REFRESH_TOKEN],
+    region: 'asia-northeast1',
+    timeoutSeconds: 120,
+  },
+  async () => {
+    logger.info('scheduledEmailSync: start');
+    const results = await runEmailSync(db);
+    logger.info('scheduledEmailSync: done', { results });
+  }
+);
+
+// 手動実行用エンドポイント（動作確認・即時反映したい時に使用）
+exports.manualEmailSync = onRequest(
+  {
+    secrets: [GMAIL_OAUTH_CLIENT_ID, GMAIL_OAUTH_CLIENT_SECRET, GMAIL_REFRESH_TOKEN, SYNC_SECRET],
+    region: 'asia-northeast1',
+    timeoutSeconds: 120,
+  },
+  async (req, res) => {
+    const provided = req.query.secret;
+    if (!provided || provided !== SYNC_SECRET.value()) {
+      res.status(403).json({ error: 'forbidden' });
+      return;
+    }
+    try {
+      const results = await runEmailSync(db);
+      res.status(200).json({ ok: true, results });
+    } catch (err) {
+      logger.error('manualEmailSync failed', err);
+      res.status(500).json({ ok: false, error: err.message });
     }
   }
 );
