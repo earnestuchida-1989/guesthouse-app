@@ -79,7 +79,6 @@ export default function LineNoteImport() {
 
   return (
     <div>
-      <h2 className="text-3xl font-bold text-gray-800 mb-2">📝 LINEノート取り込み</h2>
       <p className="text-sm text-gray-500 mb-6">
         LINEの「ノート」機能はWebhookで自動取得できないため、内容をコピーしてここに貼り付けてください。
         通常のLINEメッセージ取り込みと同じ形式で解析し、内容を確認してから登録します。

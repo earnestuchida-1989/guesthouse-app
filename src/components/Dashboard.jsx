@@ -11,7 +11,6 @@ import AccountManagement from './AccountManagement';
 import VendorManagement from './VendorManagement';
 import CustomerReports from './CustomerReports';
 import MasterDataManagement from './MasterDataManagement';
-import LineNoteImport from './LineNoteImport';
 
 const NAV_ITEMS = [
   { key: 'overview', label: '📊 概要' },
@@ -20,7 +19,6 @@ const NAV_ITEMS = [
   { key: 'accounts', label: '👥 アカウント管理', adminOnly: true },
   { key: 'vendors', label: '🏢 協力業者管理', adminOnly: true },
   { key: 'masterdata', label: '📇 マスタデータ管理', adminOnly: true },
-  { key: 'lineNoteImport', label: '📝 LINEノート取り込み', adminOnly: true },
 ];
 
 export default function Dashboard({ user, onLogout }) {
@@ -467,8 +465,6 @@ export default function Dashboard({ user, onLogout }) {
           {currentPage === 'vendors' && isAdmin && <VendorManagement />}
 
           {currentPage === 'masterdata' && isAdmin && <MasterDataManagement />}
-
-          {currentPage === 'lineNoteImport' && isAdmin && <LineNoteImport />}
         </main>
       </div>
     </div>

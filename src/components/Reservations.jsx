@@ -4,6 +4,7 @@ import { onPropertyDirectoryChange } from '../services/propertyDirectoryService'
 import AddReservationModal from './AddReservationModal';
 import EditReservationModal from './EditReservationModal';
 import CompletionReportModal from './CompletionReportModal';
+import LineNoteImport from './LineNoteImport';
 
 export default function Reservations({
   allowedProperties = null,
@@ -19,6 +20,7 @@ export default function Reservations({
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
+  const [showLineNoteModal, setShowLineNoteModal] = useState(false);
   const [selectedReservation, setSelectedReservation] = useState(null);
   const [propertyDirectory, setPropertyDirectory] = useState({});
   const [customerFilter, setCustomerFilter] = useState('');
@@ -167,12 +169,22 @@ export default function Reservations({
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">清掃スケジュール管理</h1>
         </div>
         {!readOnly && (
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-6 rounded-lg transition whitespace-nowrap"
-          >
-            + 新規予定追加
-          </button>
+          <div className="flex flex-wrap gap-2">
+            {isAdmin && (
+              <button
+                onClick={() => setShowLineNoteModal(true)}
+                className="bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-bold py-2 px-6 rounded-lg transition whitespace-nowrap"
+              >
+                📝 LINEノート取り込み
+              </button>
+            )}
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-6 rounded-lg transition whitespace-nowrap"
+            >
+              + 新規予定追加
+            </button>
+          </div>
         )}
       </div>
 
@@ -555,6 +567,25 @@ export default function Reservations({
           }}
           onCompleted={() => {}}
         />
+      )}
+
+      {showLineNoteModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col">
+            <div className="flex justify-between items-center p-4 border-b">
+              <h3 className="text-lg font-bold text-gray-800">LINEノート取り込み</h3>
+              <button
+                onClick={() => setShowLineNoteModal(false)}
+                className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
+              >
+                ×
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto">
+              <LineNoteImport />
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
