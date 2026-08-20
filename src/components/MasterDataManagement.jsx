@@ -943,15 +943,16 @@ function useSupplyTracking(tracking) {
       ? tracking.items.map((it) => ({
           name: it.name || '',
           minQuantity: typeof it.minQuantity === 'number' ? String(it.minQuantity) : '',
+          perPerson: typeof it.perPerson === 'number' ? String(it.perPerson) : '',
           currentStock: typeof it.currentStock === 'number' ? String(it.currentStock) : '',
         }))
-      : [{ name: '', minQuantity: '', currentStock: '' }]
+      : [{ name: '', minQuantity: '', perPerson: '', currentStock: '' }]
   );
 
   const updateItem = (idx, field, value) => {
     setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, [field]: value } : it)));
   };
-  const addItem = () => setItems((prev) => [...prev, { name: '', minQuantity: '', currentStock: '' }]);
+  const addItem = () => setItems((prev) => [...prev, { name: '', minQuantity: '', perPerson: '', currentStock: '' }]);
   const removeItem = (idx) => setItems((prev) => prev.filter((_, i) => i !== idx));
 
   const toData = () => ({
@@ -963,6 +964,7 @@ function useSupplyTracking(tracking) {
           .map((it) => ({
             name: it.name.trim(),
             minQuantity: it.minQuantity !== '' ? parseInt(it.minQuantity, 10) : 0,
+            perPerson: it.perPerson !== '' ? parseInt(it.perPerson, 10) : 0,
             currentStock: storesOnSite && it.currentStock !== '' ? parseInt(it.currentStock, 10) : null,
           }))
       : [],
@@ -994,6 +996,13 @@ function SupplyEditorSection({ title, icon, unitLabel, tracking, note }) {
             />
             この物件で保管している（在庫数を管理する）
           </label>
+          <div className="flex items-center gap-2 text-xs text-gray-400 px-0.5">
+            <span className="flex-1">品目</span>
+            <span className="w-24">基本数</span>
+            <span className="w-24">1人あたり+</span>
+            {tracking.storesOnSite && <span className="w-24">現在庫</span>}
+            <span className="w-4" />
+          </div>
           <div className="space-y-2">
             {tracking.items.map((item, idx) => (
               <div key={idx} className="flex items-center gap-2">
@@ -1008,7 +1017,16 @@ function SupplyEditorSection({ title, icon, unitLabel, tracking, note }) {
                   type="number"
                   value={item.minQuantity}
                   onChange={(e) => tracking.updateItem(idx, 'minQuantity', e.target.value)}
-                  placeholder={`最低${unitLabel}数`}
+                  placeholder={`基本${unitLabel}数`}
+                  title={`基本${unitLabel}数（人数に関わらず最低限必要な数）`}
+                  className="w-24 px-2 py-1.5 border border-gray-300 rounded text-sm"
+                />
+                <input
+                  type="number"
+                  value={item.perPerson}
+                  onChange={(e) => tracking.updateItem(idx, 'perPerson', e.target.value)}
+                  placeholder="1人あたり+"
+                  title={`宿泊人数1人あたりに追加で必要な${unitLabel}数（例：タオルなら1人あたり2枚など）`}
                   className="w-24 px-2 py-1.5 border border-gray-300 rounded text-sm"
                 />
                 {tracking.storesOnSite && (
@@ -1274,14 +1292,14 @@ function PropertyModal({ property, customers, vendors = [], existingProperties =
             icon="🧺"
             unitLabel="枚"
             tracking={linenTracking}
-            note='ここで登録した品目は「清掃管理」画面の各予定に「🧺 リネン準備OK」チェックとして表示されます。在庫を保管している場合、チェックを入れるたびに現在庫から最低枚数分が自動で差し引かれます。'
+            note='必要数は「基本数 ＋ 1人あたり×宿泊人数」で自動計算されます（例：基本0枚・1人あたり2枚のバスタオルは、4名予約なら8枚）。人数未定の予約は基本数のみで計算されます。ここで登録した品目は「清掃管理」画面の各予定に「🧺 リネン準備OK」チェックとして表示されます。在庫を保管している場合、チェックを入れるたびに必要数分が自動で差し引かれます。'
           />
           <SupplyEditorSection
             title="消耗品管理"
             icon="🧴"
             unitLabel="個"
             tracking={suppliesTracking}
-            note="トイレットペーパー・洗剤・アメニティ等、物件に置いておく消耗品の最低数・在庫を管理できます。清掃管理画面の物件詳細からも確認できます。"
+            note="トイレットペーパー・洗剤・アメニティ等、物件に置いておく消耗品の必要数・在庫を管理できます（必要数はリネンと同じく基本数＋1人あたりで計算）。清掃管理画面の物件詳細からも確認できます。"
           />
           <div>
             <label className="block text-gray-700 font-semibold mb-2">備考</label>

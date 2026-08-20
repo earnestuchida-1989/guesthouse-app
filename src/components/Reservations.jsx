@@ -51,7 +51,7 @@ export default function Reservations({
     return new Date(now.getFullYear(), now.getMonth());
   });
   const [selectedDate, setSelectedDate] = useState(null);
-  const [detailPropertyName, setDetailPropertyName] = useState(null);
+  const [detailReservation, setDetailReservation] = useState(null);
 
   useEffect(() => {
     setLoading(true);
@@ -78,24 +78,27 @@ export default function Reservations({
 
   const getVendorId = (res) => propertyAssignments[res.propertyName || res.guestName] || null;
 
-  // リネン管理を使っている物件かどうか、在庫が最低枚数を下回っていないか
+  // 品目の必要数＝基本数＋1人あたり×宿泊人数（人数未定の予約は基本数のみで計算）
+  const requiredQuantity = (item, persons) => (item.minQuantity || 0) + (item.perPerson || 0) * (persons || 0);
+
+  // リネン管理を使っている物件かどうか、在庫が必要数を下回っていないか（人数に応じた必要数で判定）
   const getLinenInfo = (res) => {
     const name = res.propertyName || res.guestName;
     const linenTracking = propertyDirectory[name]?.linenTracking;
     if (!linenTracking || !linenTracking.enabled) return null;
     const lowStockItems = linenTracking.storesOnSite
       ? (linenTracking.items || []).filter(
-          (it) => typeof it.currentStock === 'number' && it.currentStock < (it.minQuantity || 0)
+          (it) => typeof it.currentStock === 'number' && it.currentStock < requiredQuantity(it, res.persons)
         )
       : [];
     return { ...linenTracking, lowStockItems };
   };
 
-  // 品目×最低枚数を「シーツ×2・バスタオル×3」のようにまとめて表示する
-  const formatLinenItems = (info) =>
+  // 品目×必要数を「シーツ×2・バスタオル×8」のようにまとめて表示する（人数を反映した実際の必要数）
+  const formatLinenItems = (info, persons) =>
     (info.items || [])
       .filter((it) => it.name)
-      .map((it) => `${it.name}×${it.minQuantity || 0}`)
+      .map((it) => `${it.name}×${requiredQuantity(it, persons)}`)
       .join('・');
 
   const handleLinenToggle = async (res) => {
@@ -484,7 +487,7 @@ export default function Reservations({
                   <p className="font-semibold text-gray-800">
                     <button
                       type="button"
-                      onClick={() => setDetailPropertyName(r.propertyName || r.guestName)}
+                      onClick={() => setDetailReservation(r)}
                       className="hover:underline hover:text-blue-600 text-left"
                     >
                       {r.propertyName || r.guestName}
@@ -527,7 +530,7 @@ export default function Reservations({
                   <p className="font-semibold text-gray-800 break-words">
                     <button
                       type="button"
-                      onClick={() => setDetailPropertyName(res.propertyName || res.guestName)}
+                      onClick={() => setDetailReservation(res)}
                       className="hover:underline hover:text-blue-600 text-left"
                     >
                       {res.propertyName || res.guestName}
@@ -570,7 +573,7 @@ export default function Reservations({
 
               {getLinenInfo(res) && (
                 <div className="text-sm">
-                  <p className="text-gray-600">🧺 準備数: {formatLinenItems(getLinenInfo(res)) || '未設定'}</p>
+                  <p className="text-gray-600">🧺 準備数: {formatLinenItems(getLinenInfo(res), res.persons) || '未設定'}</p>
                   <label className="flex items-center gap-2 mt-1">
                     <input
                       type="checkbox"
@@ -699,7 +702,7 @@ export default function Reservations({
                     <div className="flex items-center gap-1">
                       <button
                         type="button"
-                        onClick={() => setDetailPropertyName(res.propertyName || res.guestName)}
+                        onClick={() => setDetailReservation(res)}
                         className="truncate hover:underline hover:text-blue-600 text-left"
                         title={res.propertyName || res.guestName}
                       >
@@ -755,9 +758,9 @@ export default function Reservations({
                       <div>
                         <p
                           className="text-xs text-gray-500 truncate"
-                          title={formatLinenItems(getLinenInfo(res)) || '未設定'}
+                          title={formatLinenItems(getLinenInfo(res), res.persons) || '未設定'}
                         >
-                          {formatLinenItems(getLinenInfo(res)) || '未設定'}
+                          {formatLinenItems(getLinenInfo(res), res.persons) || '未設定'}
                         </p>
                         <label className="flex items-center gap-1 cursor-pointer mt-0.5">
                           <input
@@ -898,11 +901,12 @@ export default function Reservations({
         </div>
       )}
 
-      {detailPropertyName && (
+      {detailReservation && (
         <PropertyDetailModal
-          propertyName={detailPropertyName}
-          info={propertyDirectory[detailPropertyName]}
-          onClose={() => setDetailPropertyName(null)}
+          propertyName={detailReservation.propertyName || detailReservation.guestName}
+          info={propertyDirectory[detailReservation.propertyName || detailReservation.guestName]}
+          persons={typeof detailReservation.persons === 'number' ? detailReservation.persons : undefined}
+          onClose={() => setDetailReservation(null)}
         />
       )}
     </div>
