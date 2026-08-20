@@ -6,7 +6,6 @@ import { onPropertyAssignmentsChange, onVendorsChange } from '../services/vendor
 import { onPropertiesChange } from '../services/propertyService';
 import { PROPERTY_PRICES, COST_RATIO } from '../data/propertyPrices';
 import Reservations from './Reservations';
-import Schedule from './Schedule';
 import AccountManagement from './AccountManagement';
 import VendorManagement from './VendorManagement';
 import CustomerReports from './CustomerReports';
@@ -15,7 +14,6 @@ import MasterDataManagement from './MasterDataManagement';
 const NAV_ITEMS = [
   { key: 'overview', label: '📊 概要' },
   { key: 'reservations', label: '📅 清掃管理' },
-  { key: 'schedule', label: '🗓️ スケジュール' },
   { key: 'accounts', label: '👥 アカウント管理', adminOnly: true },
   { key: 'vendors', label: '🏢 協力業者管理', adminOnly: true },
   { key: 'masterdata', label: '📇 マスタデータ管理', adminOnly: true },
@@ -445,15 +443,6 @@ export default function Dashboard({ user, onLogout }) {
               allowedProperties={allowedProperties}
               readOnly={isContractor}
               currentUser={user}
-              isAdmin={isAdmin}
-              vendors={vendors}
-              propertyAssignments={propertyAssignments}
-            />
-          )}
-
-          {currentPage === 'schedule' && (
-            <Schedule
-              allowedProperties={allowedProperties}
               isAdmin={isAdmin}
               vendors={vendors}
               propertyAssignments={propertyAssignments}

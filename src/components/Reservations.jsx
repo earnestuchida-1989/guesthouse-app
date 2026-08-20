@@ -6,6 +6,21 @@ import EditReservationModal from './EditReservationModal';
 import CompletionReportModal from './CompletionReportModal';
 import LineNoteImport from './LineNoteImport';
 
+function toDateStr(y, m, d) {
+  return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
+// 混雑度（その日の清掃件数）に応じたグラデーション。件数が多いほど濃い青になり、
+// 「忙しい日」が一目で分かるようにする。
+function heatColor(count) {
+  if (count === 0) return 'bg-white text-gray-800 font-semibold border-gray-200 hover:border-gray-400';
+  if (count === 1) return 'bg-blue-100 text-blue-900 font-semibold border-blue-200 hover:bg-blue-200';
+  if (count === 2) return 'bg-blue-300 text-blue-900 font-bold border-blue-400 hover:bg-blue-400';
+  if (count === 3) return 'bg-blue-500 text-white font-bold border-blue-600 hover:bg-blue-600';
+  if (count === 4) return 'bg-blue-700 text-white font-bold border-blue-800 hover:bg-blue-800';
+  return 'bg-blue-950 text-white font-bold border-black hover:bg-black';
+}
+
 export default function Reservations({
   allowedProperties = null,
   readOnly = false,
@@ -28,6 +43,12 @@ export default function Reservations({
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [vendorFilter, setVendorFilter] = useState('');
+  const [view, setView] = useState('list'); // 'list' | 'calendar'
+  const [currentMonth, setCurrentMonth] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth());
+  });
+  const [selectedDate, setSelectedDate] = useState(null);
 
   useEffect(() => {
     setLoading(true);
@@ -162,11 +183,65 @@ export default function Reservations({
       ? 'bg-blue-100 text-blue-800'
       : 'bg-yellow-100 text-yellow-800';
 
+  // --- カレンダー表示用（絞り込み後のsortedReservationsをそのまま使う） ---
+  const daysInMonth = (date) => new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  const firstDayOfMonth = (date) => new Date(date.getFullYear(), date.getMonth(), 1).getDay();
+  const calYear = currentMonth.getFullYear();
+  const calMonth = currentMonth.getMonth();
+  const calDays = [];
+  const totalDays = daysInMonth(currentMonth);
+  const startingDayOfWeek = firstDayOfMonth(currentMonth);
+  for (let i = 0; i < startingDayOfWeek; i++) calDays.push(null);
+  for (let i = 1; i <= totalDays; i++) calDays.push(i);
+
+  const calActiveReservations = sortedReservations.filter((r) => r.status !== 'cancelled');
+  const monthReservations = calActiveReservations.filter((r) => {
+    const d = r.cleaningDate || r.checkOut;
+    return d && d.startsWith(`${calYear}-${String(calMonth + 1).padStart(2, '0')}`);
+  });
+  const reservationsByDate = {};
+  monthReservations.forEach((r) => {
+    const d = r.cleaningDate || r.checkOut;
+    if (!reservationsByDate[d]) reservationsByDate[d] = [];
+    reservationsByDate[d].push(r);
+  });
+  const bookedDaySet = new Set(Object.keys(reservationsByDate).map((d) => parseInt(d.split('-')[2], 10)));
+  const checkInDaySet = new Set(
+    Object.entries(reservationsByDate)
+      .filter(([, list]) => list.some((r) => r.hasCheckIn))
+      .map(([d]) => parseInt(d.split('-')[2], 10))
+  );
+  const calWorkDays = bookedDaySet.size;
+  const calFreeDays = totalDays - calWorkDays;
+  const calMonthYear = currentMonth.toLocaleString('ja-JP', { year: 'numeric', month: 'long' });
+  const calSelectedList = selectedDate ? reservationsByDate[selectedDate] || [] : monthReservations;
+  const calListTitle = selectedDate
+    ? `${parseInt(selectedDate.split('-')[2], 10)}日の清掃予定`
+    : 'この月の清掃予定';
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
-        <div>
+        <div className="flex items-center gap-3">
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">清掃スケジュール管理</h1>
+          <div className="inline-flex rounded-lg border border-gray-300 overflow-hidden text-sm flex-shrink-0">
+            <button
+              onClick={() => setView('list')}
+              className={`px-3 py-1.5 font-semibold transition ${
+                view === 'list' ? 'bg-blue-500 text-white' : 'bg-white text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              📋 リスト
+            </button>
+            <button
+              onClick={() => setView('calendar')}
+              className={`px-3 py-1.5 font-semibold transition ${
+                view === 'calendar' ? 'bg-blue-500 text-white' : 'bg-white text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              🗓️ カレンダー
+            </button>
+          </div>
         </div>
         {!readOnly && (
           <div className="flex flex-wrap gap-2">
@@ -267,6 +342,139 @@ export default function Reservations({
       {loading ? (
         <div className="text-center py-12">
           <p className="text-gray-600">データ読み込み中...</p>
+        </div>
+      ) : view === 'calendar' ? (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* カレンダー */}
+          <div className="lg:col-span-2 bg-white rounded-lg shadow-md p-6">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-gray-800">{calMonthYear}</h3>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    setCurrentMonth(new Date(calYear, calMonth - 1));
+                    setSelectedDate(null);
+                  }}
+                  className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-1 rounded transition"
+                >
+                  ◀
+                </button>
+                <button
+                  onClick={() => {
+                    setCurrentMonth(new Date(calYear, calMonth + 1));
+                    setSelectedDate(null);
+                  }}
+                  className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-1 rounded transition"
+                >
+                  ▶
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-7 gap-2 mb-4">
+              {['日', '月', '火', '水', '木', '金', '土'].map((day) => (
+                <div key={day} className="text-center font-bold text-gray-600 py-2">
+                  {day}
+                </div>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-7 gap-2">
+              {calDays.map((day, index) => {
+                if (day === null) {
+                  return <div key={index} className="aspect-square bg-gray-50 rounded-lg" />;
+                }
+                const dateStr = toDateStr(calYear, calMonth, day);
+                const isBooked = bookedDaySet.has(day);
+                const hasCheckIn = checkInDaySet.has(day);
+                const isSelected = selectedDate === dateStr;
+                const count = isBooked ? reservationsByDate[dateStr].length : 0;
+                return (
+                  <button
+                    key={index}
+                    onClick={() => setSelectedDate(isSelected ? null : dateStr)}
+                    className={`relative aspect-square flex flex-col items-center justify-center rounded-lg border-2 transition ${
+                      isSelected ? 'ring-2 ring-offset-1 ring-gray-800' : ''
+                    } ${heatColor(count)}`}
+                  >
+                    {hasCheckIn && (
+                      <span
+                        className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-orange-500 ring-1 ring-white"
+                        title="チェックインあり（要優先対応）"
+                      />
+                    )}
+                    <span>{day}</span>
+                    {isBooked && <span className="text-[10px] leading-none mt-0.5">{count}件</span>}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="mt-6 pt-6 border-t flex flex-wrap items-center gap-4">
+              <p className="text-sm text-gray-600 flex items-center gap-1">
+                <span>混雑度:</span>
+                <span className="inline-block w-4 h-4 bg-white border border-gray-300 rounded"></span>
+                <span className="inline-block w-4 h-4 bg-blue-100 rounded"></span>
+                <span className="inline-block w-4 h-4 bg-blue-300 rounded"></span>
+                <span className="inline-block w-4 h-4 bg-blue-500 rounded"></span>
+                <span className="inline-block w-4 h-4 bg-blue-700 rounded"></span>
+                <span className="inline-block w-4 h-4 bg-blue-950 rounded"></span>
+                <span>少ない→多い</span>
+              </p>
+              <p className="text-sm text-gray-600 flex items-center">
+                <span className="inline-block w-3 h-3 bg-orange-500 rounded-full mr-2"></span>
+                <span>チェックインあり（要優先対応）</span>
+              </p>
+            </div>
+          </div>
+
+          {/* 右側：予約状況（編集・削除等は「📋 リスト」表示に切り替えて操作） */}
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-gray-800">{calListTitle}</h3>
+              {selectedDate && (
+                <button onClick={() => setSelectedDate(null)} className="text-xs text-blue-600 hover:underline">
+                  月全体を表示
+                </button>
+              )}
+            </div>
+            <div className="space-y-3 max-h-96 overflow-y-auto">
+              {calSelectedList.length === 0 && <p className="text-sm text-gray-500">清掃予定はありません</p>}
+              {calSelectedList.map((r) => (
+                <div key={r.id} className={`pb-3 border-b last:border-b-0 ${r.hasCheckIn ? 'bg-orange-50 -mx-2 px-2 rounded' : ''}`}>
+                  <p className="text-sm text-gray-600">
+                    {r.cleaningDate || r.checkOut}
+                    {r.hasCheckIn && (
+                      <span className="ml-2 text-xs font-bold bg-orange-500 text-white px-2 py-0.5 rounded-full">
+                        🔴 イン{r.checkInTime ? ` ${r.checkInTime}` : ''}
+                      </span>
+                    )}
+                  </p>
+                  <p className="font-semibold text-gray-800">
+                    {r.propertyName || r.guestName}
+                    {getCustomerName(r) && (
+                      <span className="ml-1 font-normal text-xs text-gray-500">（{getCustomerName(r)}）</span>
+                    )}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {r.persons ? `${r.persons}名` : '人数未定'}
+                    {r.status === 'no_cleaning_needed' ? '・清掃不要' : ''}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-6 pt-6 border-t space-y-2">
+              <div>
+                <p className="text-sm text-gray-600">稼働日数</p>
+                <p className="text-2xl font-bold text-green-500">{calWorkDays}日</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">空き日数</p>
+                <p className="text-2xl font-bold text-orange-500">{calFreeDays}日</p>
+              </div>
+            </div>
+          </div>
         </div>
       ) : (
         <div className="bg-white rounded-lg shadow">
