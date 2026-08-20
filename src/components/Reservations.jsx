@@ -89,6 +89,13 @@ export default function Reservations({
     return { ...linenTracking, lowStockItems };
   };
 
+  // 品目×最低枚数を「シーツ×2・バスタオル×3」のようにまとめて表示する
+  const formatLinenItems = (info) =>
+    (info.items || [])
+      .filter((it) => it.name)
+      .map((it) => `${it.name}×${it.minQuantity || 0}`)
+      .join('・');
+
   const handleLinenToggle = async (res) => {
     try {
       await applyLinenCheck(res.id, !res.linenChecked);
@@ -548,22 +555,25 @@ export default function Reservations({
               {res.notes && <p className="text-sm text-gray-600">📝 {res.notes}</p>}
 
               {getLinenInfo(res) && (
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={!!res.linenChecked}
-                    onChange={() => handleLinenToggle(res)}
-                    className="w-4 h-4"
-                  />
-                  <span className={res.linenChecked ? 'text-green-700 font-semibold' : 'text-gray-600'}>
-                    🧺 リネン準備OK
-                  </span>
-                  {getLinenInfo(res).lowStockItems.length > 0 && (
-                    <span className="text-xs font-bold text-red-600">
-                      ⚠️ 在庫不足: {getLinenInfo(res).lowStockItems.map((it) => it.name).join('・')}
+                <div className="text-sm">
+                  <p className="text-gray-600">🧺 準備数: {formatLinenItems(getLinenInfo(res)) || '未設定'}</p>
+                  <label className="flex items-center gap-2 mt-1">
+                    <input
+                      type="checkbox"
+                      checked={!!res.linenChecked}
+                      onChange={() => handleLinenToggle(res)}
+                      className="w-4 h-4"
+                    />
+                    <span className={res.linenChecked ? 'text-green-700 font-semibold' : 'text-gray-600'}>
+                      準備OK
                     </span>
-                  )}
-                </label>
+                    {getLinenInfo(res).lowStockItems.length > 0 && (
+                      <span className="text-xs font-bold text-red-600">
+                        ⚠️ 在庫不足: {getLinenInfo(res).lowStockItems.map((it) => it.name).join('・')}
+                      </span>
+                    )}
+                  </label>
+                </div>
               )}
 
               <div className="flex items-center justify-between flex-wrap gap-2">
@@ -633,7 +643,7 @@ export default function Reservations({
 
         {/* デスクトップ：テーブル表示（コンパクト） */}
         <div className="hidden md:block overflow-x-auto">
-          <table className="w-full min-w-[820px] text-sm">
+          <table className="w-full min-w-[920px] text-sm">
             <thead className="bg-gray-100 border-b-2 border-gray-300">
               <tr>
                 <th className="px-2 py-1.5 text-left text-xs font-semibold text-gray-700">イン</th>
@@ -721,24 +731,33 @@ export default function Reservations({
                         : '待機中'}
                     </span>
                   </td>
-                  <td className="px-2 py-1.5 whitespace-nowrap">
+                  <td className="px-2 py-1.5 max-w-[9rem]">
                     {getLinenInfo(res) ? (
-                      <label className="flex items-center gap-1 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={!!res.linenChecked}
-                          onChange={() => handleLinenToggle(res)}
-                          className="w-4 h-4"
-                        />
-                        {getLinenInfo(res).lowStockItems.length > 0 && (
-                          <span
-                            className="text-xs font-bold text-red-600"
-                            title={`在庫不足: ${getLinenInfo(res).lowStockItems.map((it) => it.name).join('・')}`}
-                          >
-                            ⚠️
-                          </span>
-                        )}
-                      </label>
+                      <div>
+                        <p
+                          className="text-xs text-gray-500 truncate"
+                          title={formatLinenItems(getLinenInfo(res)) || '未設定'}
+                        >
+                          {formatLinenItems(getLinenInfo(res)) || '未設定'}
+                        </p>
+                        <label className="flex items-center gap-1 cursor-pointer mt-0.5">
+                          <input
+                            type="checkbox"
+                            checked={!!res.linenChecked}
+                            onChange={() => handleLinenToggle(res)}
+                            className="w-4 h-4"
+                          />
+                          <span className="text-xs text-gray-600">準備OK</span>
+                          {getLinenInfo(res).lowStockItems.length > 0 && (
+                            <span
+                              className="text-xs font-bold text-red-600"
+                              title={`在庫不足: ${getLinenInfo(res).lowStockItems.map((it) => it.name).join('・')}`}
+                            >
+                              ⚠️
+                            </span>
+                          )}
+                        </label>
+                      </div>
                     ) : (
                       <span className="text-gray-300 text-xs">-</span>
                     )}
