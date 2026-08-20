@@ -23,6 +23,7 @@ import {
 import { onReservationsChange } from '../services/reservationService';
 import { onVendorsChange, onPropertyAssignmentsChange } from '../services/vendorService';
 import { downloadXLSX } from '../utils/xlsxExport';
+import IcalFeedManagement from './IcalFeedManagement';
 
 const CUSTOMER_TYPE_LABELS = {
   internal: '自社',
@@ -76,6 +77,7 @@ export default function MasterDataManagement() {
   const [propertyPrefillName, setPropertyPrefillName] = useState('');
   const [showEmployeeModal, setShowEmployeeModal] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState(null);
+  const [showIcalModal, setShowIcalModal] = useState(false);
   const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
@@ -299,6 +301,15 @@ export default function MasterDataManagement() {
           className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:w-64"
         />
         <div className="flex gap-2">
+          {tab === 'properties' && (
+            <button
+              onClick={() => setShowIcalModal(true)}
+              className="bg-white hover:bg-gray-100 text-gray-700 font-bold py-2 px-4 rounded-lg border border-gray-300 transition whitespace-nowrap"
+              title="Airbnb等のiCal（.ics）カレンダー同期URLを登録・管理"
+            >
+              🔗 iCal連携
+            </button>
+          )}
           <button
             onClick={handleExportExcel}
             disabled={exporting || currentTabCount === 0}
@@ -671,6 +682,25 @@ export default function MasterDataManagement() {
           existingEmployees={employees}
           onClose={() => { setShowEmployeeModal(false); setEditingEmployee(null); }}
         />
+      )}
+
+      {showIcalModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col">
+            <div className="flex justify-between items-center p-4 border-b">
+              <h3 className="text-lg font-bold text-gray-800">🔗 iCal連携</h3>
+              <button
+                onClick={() => setShowIcalModal(false)}
+                className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
+              >
+                ×
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto">
+              <IcalFeedManagement />
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

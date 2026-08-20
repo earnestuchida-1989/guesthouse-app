@@ -40,6 +40,11 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow write: if false;
     }
+    // iCal（.ics）フィード連携設定（物件名・URL・有効/無効）。
+    // URL自体は機微情報ではないが、設定変更は管理者限定にしておく。
+    match /icalFeeds/{docId} {
+      allow read, write: if isAdmin();
+    }
 
     // 協力業者マスタ・物件担当割り当て: 読み取りはログイン済みなら誰でも可
     // （協力業者アカウントが自分の担当物件を判定するために必要）。

@@ -9,6 +9,7 @@ const { syncAllSheets } = require('./sheetSync');
 const { verifySignature, processLineEvents } = require('./lineWebhook');
 const { makeParseLineNoteText } = require('./lineNoteImport');
 const { syncAirbnbEmails } = require('./emailSync');
+const { syncIcalFeeds } = require('./icalSync');
 const {
   makeCreateStaffAccount,
   makeClearMustChangePassword,
@@ -178,6 +179,49 @@ exports.manualEmailSync = onRequest(
       res.status(200).json({ ok: true, results });
     } catch (err) {
       logger.error('manualEmailSync failed', err);
+      res.status(500).json({ ok: false, error: err.message });
+    }
+  }
+);
+
+/**
+ * iCal（.ics）フィード同期。icalFeedsコレクション（{propertyName, url, active}）に
+ * 登録された各URLを取得・解析し、reservationsへ反映する。
+ * Airbnb/Booking.com等、ほとんどの予約サイトが提供する「カレンダー同期用URL」を想定。
+ */
+// 60分ごとに全アクティブなiCalフィードを自動同期
+exports.scheduledIcalSync = onSchedule(
+  {
+    schedule: 'every 60 minutes',
+    timeZone: 'Asia/Tokyo',
+    region: 'asia-northeast1',
+    timeoutSeconds: 300,
+  },
+  async () => {
+    logger.info('scheduledIcalSync: start');
+    const results = await syncIcalFeeds(db);
+    logger.info('scheduledIcalSync: done', { results });
+  }
+);
+
+// 手動実行用エンドポイント（動作確認・即時反映したい時に使用）
+exports.manualIcalSync = onRequest(
+  {
+    secrets: [SYNC_SECRET],
+    region: 'asia-northeast1',
+    timeoutSeconds: 300,
+  },
+  async (req, res) => {
+    const provided = req.query.secret;
+    if (!provided || provided !== SYNC_SECRET.value()) {
+      res.status(403).json({ error: 'forbidden' });
+      return;
+    }
+    try {
+      const results = await syncIcalFeeds(db);
+      res.status(200).json({ ok: true, results });
+    } catch (err) {
+      logger.error('manualIcalSync failed', err);
       res.status(500).json({ ok: false, error: err.message });
     }
   }
