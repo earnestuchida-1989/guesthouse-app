@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { onPropertyDirectoryChange } from '../services/propertyDirectoryService';
-import { updateLinenStock } from '../services/propertyService';
+import { updateSupplyStock } from '../services/propertyService';
 
-export default function LinenStockManagement() {
+// リネン在庫・消耗品在庫、どちらもこの画面で表示する（trackingKeyで切り替え）。
+export default function SupplyStockManagement({ trackingKey, emptyMessage }) {
   const [propertyDirectory, setPropertyDirectory] = useState({});
   const [restockAmount, setRestockAmount] = useState({});
   const [saving, setSaving] = useState('');
@@ -13,8 +14,8 @@ export default function LinenStockManagement() {
   }, []);
 
   const properties = Object.entries(propertyDirectory)
-    .filter(([, info]) => info.linenTracking?.enabled && info.linenTracking?.storesOnSite)
-    .filter(([, info]) => Array.isArray(info.linenTracking?.items) && info.linenTracking.items.length > 0)
+    .filter(([, info]) => info[trackingKey]?.enabled && info[trackingKey]?.storesOnSite)
+    .filter(([, info]) => Array.isArray(info[trackingKey]?.items) && info[trackingKey].items.length > 0)
     .sort(([a], [b]) => a.localeCompare(b, 'ja'));
 
   const handleRestock = async (propertyName, items, itemIdx) => {
@@ -24,7 +25,7 @@ export default function LinenStockManagement() {
     setSaving(key);
     try {
       const newItems = items.map((it, i) => (i === itemIdx ? { ...it, currentStock: (it.currentStock || 0) + amount } : it));
-      await updateLinenStock(propertyName, newItems);
+      await updateSupplyStock(propertyName, trackingKey, newItems);
       setRestockAmount((prev) => ({ ...prev, [key]: '' }));
     } catch (err) {
       alert('補充に失敗しました: ' + err.message);
@@ -36,13 +37,10 @@ export default function LinenStockManagement() {
   return (
     <div>
       <p className="text-sm text-gray-500 mb-4">
-        「この物件でリネンを保管している」に設定した物件だけがここに表示されます。物件マスタの編集画面でリネン管理の品目・最低枚数を設定してください。
-        清掃管理画面でスタッフが「🧺 リネン準備OK」をチェックするたびに、最低枚数分が自動で在庫から差し引かれます。
+        「この物件で保管している」に設定した物件だけがここに表示されます。物件マスタの編集画面で品目・最低数を設定してください。
       </p>
 
-      {properties.length === 0 && (
-        <p className="text-sm text-gray-500">リネン在庫を管理している物件はまだありません。</p>
-      )}
+      {properties.length === 0 && <p className="text-sm text-gray-500">{emptyMessage}</p>}
 
       <div className="space-y-4">
         {properties.map(([propertyName, info]) => (
@@ -55,13 +53,13 @@ export default function LinenStockManagement() {
               <thead className="bg-gray-50 text-gray-500 text-xs">
                 <tr>
                   <th className="px-4 py-1.5 text-left">品目</th>
-                  <th className="px-4 py-1.5 text-left">最低枚数</th>
+                  <th className="px-4 py-1.5 text-left">最低数</th>
                   <th className="px-4 py-1.5 text-left">現在庫</th>
                   <th className="px-4 py-1.5 text-left">補充</th>
                 </tr>
               </thead>
               <tbody>
-                {info.linenTracking.items.map((item, idx) => {
+                {info[trackingKey].items.map((item, idx) => {
                   const isLow = typeof item.currentStock === 'number' && item.currentStock < (item.minQuantity || 0);
                   const key = `${propertyName}_${idx}`;
                   return (
@@ -80,11 +78,11 @@ export default function LinenStockManagement() {
                             type="number"
                             value={restockAmount[key] || ''}
                             onChange={(e) => setRestockAmount((prev) => ({ ...prev, [key]: e.target.value }))}
-                            placeholder="枚数"
+                            placeholder="数量"
                             className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
                           />
                           <button
-                            onClick={() => handleRestock(propertyName, info.linenTracking.items, idx)}
+                            onClick={() => handleRestock(propertyName, info[trackingKey].items, idx)}
                             disabled={saving === key}
                             className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold py-1 px-2 rounded"
                           >

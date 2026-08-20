@@ -5,6 +5,7 @@ import AddReservationModal from './AddReservationModal';
 import EditReservationModal from './EditReservationModal';
 import CompletionReportModal from './CompletionReportModal';
 import LineNoteImport from './LineNoteImport';
+import PropertyDetailModal from './PropertyDetailModal';
 import { applyLinenCheck } from '../services/linenService';
 
 function toDateStr(y, m, d) {
@@ -50,6 +51,7 @@ export default function Reservations({
     return new Date(now.getFullYear(), now.getMonth());
   });
   const [selectedDate, setSelectedDate] = useState(null);
+  const [detailPropertyName, setDetailPropertyName] = useState(null);
 
   useEffect(() => {
     setLoading(true);
@@ -480,7 +482,13 @@ export default function Reservations({
                     )}
                   </p>
                   <p className="font-semibold text-gray-800">
-                    {r.propertyName || r.guestName}
+                    <button
+                      type="button"
+                      onClick={() => setDetailPropertyName(r.propertyName || r.guestName)}
+                      className="hover:underline hover:text-blue-600 text-left"
+                    >
+                      {r.propertyName || r.guestName}
+                    </button>
                     {getCustomerName(r) && (
                       <span className="ml-1 font-normal text-xs text-gray-500">（{getCustomerName(r)}）</span>
                     )}
@@ -517,7 +525,13 @@ export default function Reservations({
               <div className="flex justify-between items-start gap-2">
                 <div className="min-w-0">
                   <p className="font-semibold text-gray-800 break-words">
-                    {res.propertyName || res.guestName}
+                    <button
+                      type="button"
+                      onClick={() => setDetailPropertyName(res.propertyName || res.guestName)}
+                      className="hover:underline hover:text-blue-600 text-left"
+                    >
+                      {res.propertyName || res.guestName}
+                    </button>
                     {res.isComplaint && (
                       <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-red-500 text-white align-middle">
                         🚩 クレーム
@@ -683,9 +697,14 @@ export default function Reservations({
                   </td>
                   <td className="px-2 py-1.5 text-gray-800 max-w-[11rem]">
                     <div className="flex items-center gap-1">
-                      <span className="truncate" title={res.propertyName || res.guestName}>
+                      <button
+                        type="button"
+                        onClick={() => setDetailPropertyName(res.propertyName || res.guestName)}
+                        className="truncate hover:underline hover:text-blue-600 text-left"
+                        title={res.propertyName || res.guestName}
+                      >
                         {res.propertyName || res.guestName}
-                      </span>
+                      </button>
                       {res.isComplaint && (
                         <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-bold bg-red-500 text-white">
                           🚩
@@ -877,6 +896,14 @@ export default function Reservations({
             </div>
           </div>
         </div>
+      )}
+
+      {detailPropertyName && (
+        <PropertyDetailModal
+          propertyName={detailPropertyName}
+          info={propertyDirectory[detailPropertyName]}
+          onClose={() => setDetailPropertyName(null)}
+        />
       )}
     </div>
   );

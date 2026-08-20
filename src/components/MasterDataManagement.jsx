@@ -24,7 +24,7 @@ import { onReservationsChange } from '../services/reservationService';
 import { onVendorsChange, onPropertyAssignmentsChange } from '../services/vendorService';
 import { downloadXLSX } from '../utils/xlsxExport';
 import IcalFeedManagement from './IcalFeedManagement';
-import LinenStockManagement from './LinenStockManagement';
+import SupplyStockManagement from './SupplyStockManagement';
 
 const CUSTOMER_TYPE_LABELS = {
   internal: '自社',
@@ -80,6 +80,7 @@ export default function MasterDataManagement() {
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [showIcalModal, setShowIcalModal] = useState(false);
   const [showLinenModal, setShowLinenModal] = useState(false);
+  const [showSuppliesModal, setShowSuppliesModal] = useState(false);
   const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
@@ -319,6 +320,15 @@ export default function MasterDataManagement() {
               title="リネン在庫の確認・補充"
             >
               🧺 リネン在庫
+            </button>
+          )}
+          {tab === 'properties' && (
+            <button
+              onClick={() => setShowSuppliesModal(true)}
+              className="bg-white hover:bg-gray-100 text-gray-700 font-bold py-2 px-4 rounded-lg border border-gray-300 transition whitespace-nowrap"
+              title="消耗品在庫の確認・補充"
+            >
+              🧴 消耗品在庫
             </button>
           )}
           <button
@@ -727,7 +737,26 @@ export default function MasterDataManagement() {
               </button>
             </div>
             <div className="p-6 overflow-y-auto">
-              <LinenStockManagement />
+              <SupplyStockManagement trackingKey="linenTracking" emptyMessage="リネン在庫を管理している物件はまだありません。" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showSuppliesModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] flex flex-col">
+            <div className="flex justify-between items-center p-4 border-b">
+              <h3 className="text-lg font-bold text-gray-800">🧴 消耗品在庫</h3>
+              <button
+                onClick={() => setShowSuppliesModal(false)}
+                className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
+              >
+                ×
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto">
+              <SupplyStockManagement trackingKey="suppliesTracking" emptyMessage="消耗品在庫を管理している物件はまだありません。" />
             </div>
           </div>
         </div>
@@ -904,6 +933,113 @@ function CustomerModal({ customer, onClose }) {
   );
 }
 
+// リネン管理・消耗品管理はどちらも「品目ごとの最低必要数（＋保管している物件は現在庫数）」という
+// 同じ形のデータなので、共通のフックとUIコンポーネントにまとめている。
+function useSupplyTracking(tracking) {
+  const [enabled, setEnabled] = useState(tracking?.enabled || false);
+  const [storesOnSite, setStoresOnSite] = useState(tracking?.storesOnSite || false);
+  const [items, setItems] = useState(
+    Array.isArray(tracking?.items) && tracking.items.length > 0
+      ? tracking.items.map((it) => ({
+          name: it.name || '',
+          minQuantity: typeof it.minQuantity === 'number' ? String(it.minQuantity) : '',
+          currentStock: typeof it.currentStock === 'number' ? String(it.currentStock) : '',
+        }))
+      : [{ name: '', minQuantity: '', currentStock: '' }]
+  );
+
+  const updateItem = (idx, field, value) => {
+    setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, [field]: value } : it)));
+  };
+  const addItem = () => setItems((prev) => [...prev, { name: '', minQuantity: '', currentStock: '' }]);
+  const removeItem = (idx) => setItems((prev) => prev.filter((_, i) => i !== idx));
+
+  const toData = () => ({
+    enabled,
+    storesOnSite: enabled && storesOnSite,
+    items: enabled
+      ? items
+          .filter((it) => it.name.trim())
+          .map((it) => ({
+            name: it.name.trim(),
+            minQuantity: it.minQuantity !== '' ? parseInt(it.minQuantity, 10) : 0,
+            currentStock: storesOnSite && it.currentStock !== '' ? parseInt(it.currentStock, 10) : null,
+          }))
+      : [],
+  });
+
+  return { enabled, setEnabled, storesOnSite, setStoresOnSite, items, updateItem, addItem, removeItem, toData };
+}
+
+function SupplyEditorSection({ title, icon, unitLabel, tracking, note }) {
+  return (
+    <div className="border border-gray-200 rounded-lg p-3">
+      <label className="flex items-center gap-2 font-semibold text-gray-700 mb-2">
+        <input
+          type="checkbox"
+          checked={tracking.enabled}
+          onChange={(e) => tracking.setEnabled(e.target.checked)}
+          className="w-4 h-4"
+        />
+        {icon} {title}を使う
+      </label>
+      {tracking.enabled && (
+        <div className="space-y-3 mt-2">
+          <label className="flex items-center gap-2 text-sm text-gray-600">
+            <input
+              type="checkbox"
+              checked={tracking.storesOnSite}
+              onChange={(e) => tracking.setStoresOnSite(e.target.checked)}
+              className="w-4 h-4"
+            />
+            この物件で保管している（在庫数を管理する）
+          </label>
+          <div className="space-y-2">
+            {tracking.items.map((item, idx) => (
+              <div key={idx} className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={item.name}
+                  onChange={(e) => tracking.updateItem(idx, 'name', e.target.value)}
+                  placeholder="品目"
+                  className="flex-1 px-2 py-1.5 border border-gray-300 rounded text-sm"
+                />
+                <input
+                  type="number"
+                  value={item.minQuantity}
+                  onChange={(e) => tracking.updateItem(idx, 'minQuantity', e.target.value)}
+                  placeholder={`最低${unitLabel}数`}
+                  className="w-24 px-2 py-1.5 border border-gray-300 rounded text-sm"
+                />
+                {tracking.storesOnSite && (
+                  <input
+                    type="number"
+                    value={item.currentStock}
+                    onChange={(e) => tracking.updateItem(idx, 'currentStock', e.target.value)}
+                    placeholder="現在庫"
+                    className="w-24 px-2 py-1.5 border border-gray-300 rounded text-sm"
+                  />
+                )}
+                <button
+                  type="button"
+                  onClick={() => tracking.removeItem(idx)}
+                  className="text-red-500 hover:text-red-700 text-sm px-1"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+          <button type="button" onClick={tracking.addItem} className="text-xs text-blue-600 hover:underline">
+            + 品目を追加
+          </button>
+          <p className="text-xs text-gray-400">{note}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PropertyModal({ property, customers, vendors = [], existingProperties = [], initialName, onClose }) {
   const isEdit = !!property;
   const [name, setName] = useState(property?.name || initialName || '');
@@ -939,24 +1075,10 @@ function PropertyModal({ property, customers, vendors = [], existingProperties =
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // リネン管理：品目ごとの最低必要枚数（＋保管している物件は現在庫数）
-  const [linenEnabled, setLinenEnabled] = useState(property?.linenTracking?.enabled || false);
-  const [linenStoresOnSite, setLinenStoresOnSite] = useState(property?.linenTracking?.storesOnSite || false);
-  const [linenItems, setLinenItems] = useState(
-    Array.isArray(property?.linenTracking?.items) && property.linenTracking.items.length > 0
-      ? property.linenTracking.items.map((it) => ({
-          name: it.name || '',
-          minQuantity: typeof it.minQuantity === 'number' ? String(it.minQuantity) : '',
-          currentStock: typeof it.currentStock === 'number' ? String(it.currentStock) : '',
-        }))
-      : [{ name: '', minQuantity: '', currentStock: '' }]
-  );
-
-  const updateLinenItem = (idx, field, value) => {
-    setLinenItems((prev) => prev.map((it, i) => (i === idx ? { ...it, [field]: value } : it)));
-  };
-  const addLinenItem = () => setLinenItems((prev) => [...prev, { name: '', minQuantity: '', currentStock: '' }]);
-  const removeLinenItem = (idx) => setLinenItems((prev) => prev.filter((_, i) => i !== idx));
+  // リネン管理・消耗品管理：どちらも「品目ごとの最低必要数（＋保管している物件は現在庫数）」という
+  // 同じ形のデータなので、共通のフックで管理する（useSupplyTracking、下部で定義）。
+  const linenTracking = useSupplyTracking(property?.linenTracking);
+  const suppliesTracking = useSupplyTracking(property?.suppliesTracking);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -970,13 +1092,6 @@ function PropertyModal({ property, customers, vendors = [], existingProperties =
       const customerName = customerId
         ? customers.find((c) => c.id === customerId)?.name
         : '';
-      const cleanedLinenItems = linenItems
-        .filter((it) => it.name.trim())
-        .map((it) => ({
-          name: it.name.trim(),
-          minQuantity: it.minQuantity !== '' ? parseInt(it.minQuantity, 10) : 0,
-          currentStock: linenStoresOnSite && it.currentStock !== '' ? parseInt(it.currentStock, 10) : null,
-        }));
       const data = {
         propertyId: propertyId.trim(),
         customerId: customerId || '',
@@ -990,11 +1105,8 @@ function PropertyModal({ property, customers, vendors = [], existingProperties =
         managerPhone: managerPhone.trim(),
         notes: notes.trim(),
         active,
-        linenTracking: {
-          enabled: linenEnabled,
-          storesOnSite: linenEnabled && linenStoresOnSite,
-          items: linenEnabled ? cleanedLinenItems : [],
-        },
+        linenTracking: linenTracking.toData(),
+        suppliesTracking: suppliesTracking.toData(),
       };
       if (isEdit) {
         await updateProperty(name, data, customerName);
@@ -1157,68 +1269,20 @@ function PropertyModal({ property, customers, vendors = [], existingProperties =
               />
             </div>
           </div>
-          <div className="border border-gray-200 rounded-lg p-3">
-            <label className="flex items-center gap-2 font-semibold text-gray-700 mb-2">
-              <input type="checkbox" checked={linenEnabled} onChange={(e) => setLinenEnabled(e.target.checked)} className="w-4 h-4" />
-              🧺 リネン管理を使う
-            </label>
-            {linenEnabled && (
-              <div className="space-y-3 mt-2">
-                <label className="flex items-center gap-2 text-sm text-gray-600">
-                  <input
-                    type="checkbox"
-                    checked={linenStoresOnSite}
-                    onChange={(e) => setLinenStoresOnSite(e.target.checked)}
-                    className="w-4 h-4"
-                  />
-                  この物件でリネンを保管している（在庫数を管理する）
-                </label>
-                <div className="space-y-2">
-                  {linenItems.map((item, idx) => (
-                    <div key={idx} className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={item.name}
-                        onChange={(e) => updateLinenItem(idx, 'name', e.target.value)}
-                        placeholder="品目（例：シーツ）"
-                        className="flex-1 px-2 py-1.5 border border-gray-300 rounded text-sm"
-                      />
-                      <input
-                        type="number"
-                        value={item.minQuantity}
-                        onChange={(e) => updateLinenItem(idx, 'minQuantity', e.target.value)}
-                        placeholder="最低枚数"
-                        className="w-24 px-2 py-1.5 border border-gray-300 rounded text-sm"
-                      />
-                      {linenStoresOnSite && (
-                        <input
-                          type="number"
-                          value={item.currentStock}
-                          onChange={(e) => updateLinenItem(idx, 'currentStock', e.target.value)}
-                          placeholder="現在庫"
-                          className="w-24 px-2 py-1.5 border border-gray-300 rounded text-sm"
-                        />
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => removeLinenItem(idx)}
-                        className="text-red-500 hover:text-red-700 text-sm px-1"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))}
-                </div>
-                <button type="button" onClick={addLinenItem} className="text-xs text-blue-600 hover:underline">
-                  + 品目を追加
-                </button>
-                <p className="text-xs text-gray-400">
-                  ここで登録した品目は「清掃管理」画面の各予定に「🧺 リネン準備OK」チェックとして表示されます。
-                  {linenStoresOnSite && '在庫を保管している場合、チェックを入れるたびに現在庫から最低枚数分が自動で差し引かれます。'}
-                </p>
-              </div>
-            )}
-          </div>
+          <SupplyEditorSection
+            title="リネン管理"
+            icon="🧺"
+            unitLabel="枚"
+            tracking={linenTracking}
+            note='ここで登録した品目は「清掃管理」画面の各予定に「🧺 リネン準備OK」チェックとして表示されます。在庫を保管している場合、チェックを入れるたびに現在庫から最低枚数分が自動で差し引かれます。'
+          />
+          <SupplyEditorSection
+            title="消耗品管理"
+            icon="🧴"
+            unitLabel="個"
+            tracking={suppliesTracking}
+            note="トイレットペーパー・洗剤・アメニティ等、物件に置いておく消耗品の最低数・在庫を管理できます。清掃管理画面の物件詳細からも確認できます。"
+          />
           <div>
             <label className="block text-gray-700 font-semibold mb-2">備考</label>
             <textarea

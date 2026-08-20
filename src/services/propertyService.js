@@ -27,16 +27,19 @@ export const propertyExists = async (propertyName) => {
   return snap.exists();
 };
 
+const EMPTY_TRACKING = { enabled: false, storesOnSite: false, items: [] };
+
 // propertyDirectory（物件名→顧客名・有効状態の軽量コピー、スタッフ・協力業者も読める）を同期更新。
 // 清掃予定作成の物件選択リストなど、properties（管理者限定）を直接読めない画面はこちらを使う。
-// リネン管理情報（品目・最低枚数・現在庫数）も、清掃を担当するスタッフ・協力業者が見る必要が
-// あるため、機微情報ではないこの軽量コピーに一緒に同期する。
-const syncPropertyDirectory = async (propertyName, customerId, customerName, active, linenTracking) => {
+// リネン管理・消耗品管理の情報（品目・最低枚数・現在庫数）も、清掃を担当するスタッフ・協力業者が
+// 見る必要があるため、機微情報ではないこの軽量コピーに一緒に同期する。
+const syncPropertyDirectory = async (propertyName, customerId, customerName, active, linenTracking, suppliesTracking) => {
   await setDoc(doc(db, DIRECTORY_COLLECTION, propertyName), {
     customerId: customerId || '',
     customerName: customerId ? (customerName || customerId) : '',
     active: active !== false,
-    linenTracking: linenTracking || { enabled: false, storesOnSite: false, items: [] },
+    linenTracking: linenTracking || EMPTY_TRACKING,
+    suppliesTracking: suppliesTracking || EMPTY_TRACKING,
     updatedAt: new Date().toISOString(),
   });
 };
@@ -52,7 +55,7 @@ export const addProperty = async (propertyName, data, customerName) => {
     vendorId: vendorId || null,
     updatedAt: new Date().toISOString(),
   });
-  await syncPropertyDirectory(propertyName, data.customerId, customerName, data.active, data.linenTracking);
+  await syncPropertyDirectory(propertyName, data.customerId, customerName, data.active, data.linenTracking, data.suppliesTracking);
   await setPropertyAssignment(propertyName, vendorId || null);
   return propertyName;
 };
@@ -65,7 +68,7 @@ export const updateProperty = async (propertyName, data, customerName) => {
     vendorId: vendorId || null,
     updatedAt: new Date().toISOString(),
   });
-  await syncPropertyDirectory(propertyName, data.customerId, customerName, data.active, data.linenTracking);
+  await syncPropertyDirectory(propertyName, data.customerId, customerName, data.active, data.linenTracking, data.suppliesTracking);
   await setPropertyAssignment(propertyName, vendorId || null);
 };
 
@@ -76,10 +79,11 @@ export const deleteProperty = async (propertyName) => {
   await deleteDoc(doc(db, DIRECTORY_COLLECTION, propertyName));
 };
 
-// リネン在庫の手動補充（管理者専用画面から）。properties（正データ）と
+// リネン／消耗品の在庫を手動補充（管理者専用画面から）。properties（正データ）と
 // propertyDirectory（スタッフ・協力業者が読む軽量コピー）の両方を更新する。
-export const updateLinenStock = async (propertyName, items) => {
+// trackingKey は 'linenTracking' または 'suppliesTracking'。
+export const updateSupplyStock = async (propertyName, trackingKey, items) => {
   const updatedAt = new Date().toISOString();
-  await updateDoc(doc(db, PROPERTIES_COLLECTION, propertyName), { 'linenTracking.items': items, updatedAt });
-  await updateDoc(doc(db, DIRECTORY_COLLECTION, propertyName), { 'linenTracking.items': items, updatedAt });
+  await updateDoc(doc(db, PROPERTIES_COLLECTION, propertyName), { [`${trackingKey}.items`]: items, updatedAt });
+  await updateDoc(doc(db, DIRECTORY_COLLECTION, propertyName), { [`${trackingKey}.items`]: items, updatedAt });
 };
