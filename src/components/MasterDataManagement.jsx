@@ -1105,37 +1105,22 @@ function PropertyModal({ property, customers, vendors = [], existingProperties =
   );
 }
 
-// 雇用形態ごとの従業員ID連番プレフィックス（例：shain-01, arbeit-01）。
-// 「その他」を選んだ場合は雇用形態を自由入力にし、IDは共通の emp- 連番にする。
-const EMPLOYMENT_TYPE_OPTIONS = [
-  { label: '社員', slug: 'shain' },
-  { label: 'アルバイト', slug: 'arbeit' },
-  { label: 'パート', slug: 'part' },
-  { label: '業務委託', slug: 'gyomu' },
-  { label: 'その他', slug: 'emp' },
-];
+// 入社年月（YYMM）+連番の完全数字ID（例：260101 = 2026年1月入社の1人目）を組み立てる。
+function buildNumericEmployeeId(employmentStart, existingEmployees, now) {
+  const base = employmentStart ? new Date(employmentStart) : now || new Date();
+  const yymm = `${String(base.getFullYear()).slice(-2)}${String(base.getMonth() + 1).padStart(2, '0')}`;
+  const count = existingEmployees.filter((e) => e.id && e.id.startsWith(yymm)).length;
+  const nextSeq = String(count + 1).padStart(2, '0');
+  return `${yymm}${nextSeq}`;
+}
 
 function EmployeeModal({ employee, existingEmployees = [], onClose }) {
   const isEdit = !!employee;
-  const matchedOption = EMPLOYMENT_TYPE_OPTIONS.find((o) => o.label === employee?.employmentType);
   const [id, setId] = useState(employee?.id || '');
   // 新規作成時のみ自動発番の対象にする。手動で書き換えたら以後は上書きしない（物件IDと同じ方式）。
   const [idTouched, setIdTouched] = useState(isEdit);
   const [name, setName] = useState(employee?.name || '');
-  const [typeCategory, setTypeCategory] = useState(
-    employee?.employmentType ? (matchedOption ? matchedOption.label : 'その他') : ''
-  );
-  const [customType, setCustomType] = useState(matchedOption ? '' : employee?.employmentType || '');
-  const employmentType = typeCategory === 'その他' ? customType : typeCategory;
-
-  // 雇用形態を選ぶと「スラッグ-連番」（例：shain-02）を自動で組み立てる。
-  useEffect(() => {
-    if (isEdit || idTouched || !typeCategory) return;
-    const slug = (EMPLOYMENT_TYPE_OPTIONS.find((o) => o.label === typeCategory) || {}).slug || 'emp';
-    const count = existingEmployees.filter((e) => e.id && e.id.startsWith(`${slug}-`)).length;
-    const nextSeq = String(count + 1).padStart(2, '0');
-    setId(`${slug}-${nextSeq}`);
-  }, [typeCategory, isEdit, idTouched, existingEmployees]);
+  const [employmentType, setEmploymentType] = useState(employee?.employmentType || '');
   const [phone, setPhone] = useState(employee?.phone || '');
   const [email, setEmail] = useState(employee?.email || '');
   const [lineUserId, setLineUserId] = useState(employee?.lineUserId || '');
@@ -1149,6 +1134,14 @@ function EmployeeModal({ employee, existingEmployees = [], onClose }) {
   const [active, setActive] = useState(employee?.active !== false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // 入社年月（YYMM）+連番の完全数字ID（例：260101）を自動で組み立てる。
+  // 入社日が未入力のうちは今日の年月を仮に使い、入社日を入力したらそちらに合わせて再計算する。
+  useEffect(() => {
+    if (isEdit || idTouched) return;
+    setId(buildNumericEmployeeId(employmentStart, existingEmployees));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [employmentStart, isEdit, idTouched, existingEmployees]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -1211,30 +1204,13 @@ function EmployeeModal({ employee, existingEmployees = [], onClose }) {
           </div>
           <div>
             <label className="block text-gray-700 font-semibold mb-2">雇用形態</label>
-            <select
-              value={typeCategory}
-              onChange={(e) => setTypeCategory(e.target.value)}
+            <input
+              type="text"
+              value={employmentType}
+              onChange={(e) => setEmploymentType(e.target.value)}
+              placeholder="例：社員／アルバイト"
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">選択してください</option>
-              {EMPLOYMENT_TYPE_OPTIONS.map((o) => (
-                <option key={o.label} value={o.label}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-            {!isEdit && (
-              <p className="text-xs text-gray-400 mt-1">選ぶと従業員IDが「{'{'}区分{'}'}-連番」で自動入力されます（下で変更可）。</p>
-            )}
-            {typeCategory === 'その他' && (
-              <input
-                type="text"
-                value={customType}
-                onChange={(e) => setCustomType(e.target.value)}
-                placeholder="雇用形態を入力（例：契約社員）"
-                className="w-full mt-2 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            )}
+            />
           </div>
           <div>
             <label className="block text-gray-700 font-semibold mb-2">従業員ID *</label>
@@ -1246,7 +1222,7 @@ function EmployeeModal({ employee, existingEmployees = [], onClose }) {
                 setIdTouched(true);
               }}
               disabled={isEdit}
-              placeholder="雇用形態を選ぶと自動入力されます（例：shain-01）"
+              placeholder="自動入力されます（例：260101＝2026年1月入社の1人目）"
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
               required
             />
@@ -1311,6 +1287,7 @@ function EmployeeModal({ employee, existingEmployees = [], onClose }) {
                 onChange={(e) => setEmploymentStart(e.target.value)}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
+              {!isEdit && <p className="text-xs text-gray-400 mt-1">入力すると従業員IDの年月部分に反映されます。</p>}
             </div>
             <div>
               <label className="block text-gray-700 font-semibold mb-2">雇用終了日</label>
