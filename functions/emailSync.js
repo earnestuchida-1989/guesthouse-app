@@ -56,36 +56,73 @@ async function syncAirbnbEmails(db, gmailCredentials, listingAliases) {
         continue;
       }
 
+      // 確認コードが一致する予約が既にある場合（＝iCal同期が先に作成済み）は、
+      // 新規レコードを作らず、その予約に人数などを追記するだけにする（重複防止）。
+      let existingRef = null;
+      if (parsed.confirmationCode) {
+        const matchSnap = await db
+          .collection('reservations')
+          .where('confirmationCode', '==', parsed.confirmationCode)
+          .limit(1)
+          .get();
+        if (!matchSnap.empty) {
+          existingRef = matchSnap.docs[0].ref;
+        }
+      }
+
       const hash = crypto.createHash('sha256').update(msg.id).digest('hex').slice(0, 16);
       const docId = `email_${sanitizeForId(hash)}`;
-      await db
-        .collection('reservations')
-        .doc(docId)
-        .set(
+      const ref = existingRef || db.collection('reservations').doc(docId);
+      const notes = `Airbnb予約 / ゲスト:${parsed.guestName || '不明'} / 確認コード:${parsed.confirmationCode || '不明'} / チェックイン:${parsed.checkInDate} ${parsed.checkInTime} / チェックアウト:${parsed.checkOutDate} ${parsed.checkOutTime} / 人数:${parsed.guestCountRaw || ''}`;
+
+      if (existingRef) {
+        // 既存（iCal由来など）の予約に人数・備考だけ追記する。日付や物件名は上書きしない
+        // （iCal側の方が今後も自動更新され続ける正のデータのため）。
+        await existingRef.set(
           {
-            propertyName: parsed.propertyName,
-            cleaningDate: parsed.checkOutDate,
-            checkInDate: parsed.checkInDate,
             persons: parsed.persons,
-            notes: `Airbnb予約 / ゲスト:${parsed.guestName || '不明'} / 確認コード:${parsed.confirmationCode || '不明'} / チェックイン:${parsed.checkInDate} ${parsed.checkInTime} / チェックアウト:${parsed.checkOutDate} ${parsed.checkOutTime} / 人数:${parsed.guestCountRaw || ''}`,
-            status: 'confirmed',
-            hasCheckIn: false,
-            checkInTime: '',
-            source: 'email',
+            notes,
+            confirmationCode: parsed.confirmationCode,
             emailMessageId: msg.id,
             updatedAt: new Date().toISOString(),
           },
           { merge: true }
         );
+      } else {
+        await ref.set(
+          {
+            propertyName: parsed.propertyName,
+            cleaningDate: parsed.checkOutDate,
+            checkInDate: parsed.checkInDate,
+            persons: parsed.persons,
+            notes,
+            status: 'confirmed',
+            hasCheckIn: false,
+            checkInTime: '',
+            source: 'email',
+            confirmationCode: parsed.confirmationCode,
+            emailMessageId: msg.id,
+            updatedAt: new Date().toISOString(),
+          },
+          { merge: true }
+        );
+      }
 
       await processedRef.set({
         subject: msg.subject,
         reason: 'ok',
         propertyName: parsed.propertyName,
         cleaningDate: parsed.checkOutDate,
+        mergedIntoExisting: !!existingRef,
         processedAt: new Date().toISOString(),
       });
-      results.push({ messageId: msg.id, ok: true, propertyName: parsed.propertyName, cleaningDate: parsed.checkOutDate });
+      results.push({
+        messageId: msg.id,
+        ok: true,
+        propertyName: parsed.propertyName,
+        cleaningDate: parsed.checkOutDate,
+        mergedIntoExisting: !!existingRef,
+      });
     } catch (err) {
       // エラー時はprocessedEmailMessagesに記録しない＝次回また再試行される
       results.push({ messageId: msg.id, error: err.message });

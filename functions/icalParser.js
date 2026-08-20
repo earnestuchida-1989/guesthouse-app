@@ -35,9 +35,16 @@ function extractDateValue(line) {
   return `${m[1]}-${m[2]}-${m[3]}`;
 }
 
+// Airbnbの DESCRIPTION 欄には人数等は含まれないが、予約詳細ページのURLに
+// 確認コード（例: HMPBZPZDWS）が含まれている。これはホスト宛の予約確定メールに
+// 記載されている確認コードと同じものなので、メール取込み（emailParser.js）側の
+// 確認コードと突き合わせて、後から人数などの情報をマージするのに使える。
+const CONFIRMATION_CODE_HINT = /reservations\/details\/([A-Z0-9]{6,12})/;
+
 /**
- * ics本文を解析し、VEVENTごとに { uid, startDate, endDate, summary } の配列を返す。
+ * ics本文を解析し、VEVENTごとに { uid, startDate, endDate, summary, confirmationCode } の配列を返す。
  * startDate/endDateは "YYYY-MM-DD"（DTENDはチェックアウト日＝多くの場合そのまま清掃日として使える）。
+ * confirmationCodeはAirbnbの場合のみ取得できる（無ければnull）。
  */
 function parseIcs(icsText) {
   if (!icsText) return [];
@@ -47,7 +54,7 @@ function parseIcs(icsText) {
 
   for (const line of lines) {
     if (line.startsWith('BEGIN:VEVENT')) {
-      current = { uid: null, startDate: null, endDate: null, summary: '' };
+      current = { uid: null, startDate: null, endDate: null, summary: '', confirmationCode: null };
       continue;
     }
     if (line.startsWith('END:VEVENT')) {
@@ -67,6 +74,9 @@ function parseIcs(icsText) {
       current.endDate = extractDateValue(line);
     } else if (line.startsWith('SUMMARY')) {
       current.summary = line.slice(line.indexOf(':') + 1).trim();
+    } else if (line.startsWith('DESCRIPTION')) {
+      const m = line.match(CONFIRMATION_CODE_HINT);
+      if (m) current.confirmationCode = m[1];
     }
   }
 

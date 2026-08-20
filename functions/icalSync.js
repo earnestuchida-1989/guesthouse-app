@@ -52,24 +52,26 @@ async function syncIcalFeeds(db) {
         const hash = crypto.createHash('sha256').update(uidSource).digest('hex').slice(0, 16);
         const docId = `ical_${sanitizeForId(feedId)}_${hash}`;
         const ref = db.collection('reservations').doc(docId);
-        batch.set(
-          ref,
-          {
-            propertyName: feed.propertyName,
-            cleaningDate: event.endDate,
-            checkInDate: event.startDate,
-            persons: null,
-            notes: event.summary || '',
-            status: 'confirmed',
-            hasCheckIn: false,
-            checkInTime: '',
-            source: 'ical',
-            icalFeedId: feedId,
-            icalUid: uidSource,
-            updatedAt: new Date().toISOString(),
-          },
-          { merge: true }
-        );
+        // persons（人数）はここでは書かない。iCal自体に人数情報が無いため、
+        // メール取込み（emailSync.js）が確認コード一致で後から人数だけ埋めることがある。
+        // 毎回persons:nullを書いてしまうと、その埋めた値を1時間ごとに消してしまうため注意。
+        const fields = {
+          propertyName: feed.propertyName,
+          cleaningDate: event.endDate,
+          checkInDate: event.startDate,
+          notes: event.summary || '',
+          status: 'confirmed',
+          hasCheckIn: false,
+          checkInTime: '',
+          source: 'ical',
+          icalFeedId: feedId,
+          icalUid: uidSource,
+          updatedAt: new Date().toISOString(),
+        };
+        if (event.confirmationCode) {
+          fields.confirmationCode = event.confirmationCode;
+        }
+        batch.set(ref, fields, { merge: true });
         created += 1;
       }
       if (created > 0) {
