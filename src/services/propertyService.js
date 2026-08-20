@@ -29,11 +29,14 @@ export const propertyExists = async (propertyName) => {
 
 // propertyDirectory（物件名→顧客名・有効状態の軽量コピー、スタッフ・協力業者も読める）を同期更新。
 // 清掃予定作成の物件選択リストなど、properties（管理者限定）を直接読めない画面はこちらを使う。
-const syncPropertyDirectory = async (propertyName, customerId, customerName, active) => {
+// リネン管理情報（品目・最低枚数・現在庫数）も、清掃を担当するスタッフ・協力業者が見る必要が
+// あるため、機微情報ではないこの軽量コピーに一緒に同期する。
+const syncPropertyDirectory = async (propertyName, customerId, customerName, active, linenTracking) => {
   await setDoc(doc(db, DIRECTORY_COLLECTION, propertyName), {
     customerId: customerId || '',
     customerName: customerId ? (customerName || customerId) : '',
     active: active !== false,
+    linenTracking: linenTracking || { enabled: false, storesOnSite: false, items: [] },
     updatedAt: new Date().toISOString(),
   });
 };
@@ -49,7 +52,7 @@ export const addProperty = async (propertyName, data, customerName) => {
     vendorId: vendorId || null,
     updatedAt: new Date().toISOString(),
   });
-  await syncPropertyDirectory(propertyName, data.customerId, customerName, data.active);
+  await syncPropertyDirectory(propertyName, data.customerId, customerName, data.active, data.linenTracking);
   await setPropertyAssignment(propertyName, vendorId || null);
   return propertyName;
 };
@@ -62,7 +65,7 @@ export const updateProperty = async (propertyName, data, customerName) => {
     vendorId: vendorId || null,
     updatedAt: new Date().toISOString(),
   });
-  await syncPropertyDirectory(propertyName, data.customerId, customerName, data.active);
+  await syncPropertyDirectory(propertyName, data.customerId, customerName, data.active, data.linenTracking);
   await setPropertyAssignment(propertyName, vendorId || null);
 };
 
@@ -71,4 +74,12 @@ export const updateProperty = async (propertyName, data, customerName) => {
 export const deleteProperty = async (propertyName) => {
   await deleteDoc(doc(db, PROPERTIES_COLLECTION, propertyName));
   await deleteDoc(doc(db, DIRECTORY_COLLECTION, propertyName));
+};
+
+// リネン在庫の手動補充（管理者専用画面から）。properties（正データ）と
+// propertyDirectory（スタッフ・協力業者が読む軽量コピー）の両方を更新する。
+export const updateLinenStock = async (propertyName, items) => {
+  const updatedAt = new Date().toISOString();
+  await updateDoc(doc(db, PROPERTIES_COLLECTION, propertyName), { 'linenTracking.items': items, updatedAt });
+  await updateDoc(doc(db, DIRECTORY_COLLECTION, propertyName), { 'linenTracking.items': items, updatedAt });
 };

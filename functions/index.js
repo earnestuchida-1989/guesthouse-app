@@ -10,6 +10,7 @@ const { verifySignature, processLineEvents } = require('./lineWebhook');
 const { makeParseLineNoteText } = require('./lineNoteImport');
 const { syncAirbnbEmails } = require('./emailSync');
 const { syncIcalFeeds } = require('./icalSync');
+const { makeApplyLinenCheck } = require('./linenCheck');
 const {
   makeCreateStaffAccount,
   makeClearMustChangePassword,
@@ -31,6 +32,7 @@ exports.setUserActive = makeSetUserActive(db);
 exports.resetUserPassword = makeResetUserPassword(db);
 exports.getMyCustomerReports = makeGetMyCustomerReports(db);
 exports.parseLineNoteText = makeParseLineNoteText(db);
+exports.applyLinenCheck = makeApplyLinenCheck(db);
 
 const GOOGLE_SERVICE_ACCOUNT_KEY = defineSecret('GOOGLE_SERVICE_ACCOUNT_KEY');
 const SYNC_SECRET = defineSecret('SYNC_SECRET');

@@ -5,6 +5,7 @@ import AddReservationModal from './AddReservationModal';
 import EditReservationModal from './EditReservationModal';
 import CompletionReportModal from './CompletionReportModal';
 import LineNoteImport from './LineNoteImport';
+import { applyLinenCheck } from '../services/linenService';
 
 function toDateStr(y, m, d) {
   return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
@@ -74,6 +75,27 @@ export default function Reservations({
   };
 
   const getVendorId = (res) => propertyAssignments[res.propertyName || res.guestName] || null;
+
+  // リネン管理を使っている物件かどうか、在庫が最低枚数を下回っていないか
+  const getLinenInfo = (res) => {
+    const name = res.propertyName || res.guestName;
+    const linenTracking = propertyDirectory[name]?.linenTracking;
+    if (!linenTracking || !linenTracking.enabled) return null;
+    const lowStockItems = linenTracking.storesOnSite
+      ? (linenTracking.items || []).filter(
+          (it) => typeof it.currentStock === 'number' && it.currentStock < (it.minQuantity || 0)
+        )
+      : [];
+    return { ...linenTracking, lowStockItems };
+  };
+
+  const handleLinenToggle = async (res) => {
+    try {
+      await applyLinenCheck(res.id, !res.linenChecked);
+    } catch (err) {
+      alert('リネンチェックの更新に失敗しました: ' + err.message);
+    }
+  };
 
   // Googleスプレッドシート／カレンダーから自動取り込みされた予定には、
   // 元データ（同期元のシート・カレンダー）へのリンクを付ける。
@@ -525,6 +547,25 @@ export default function Reservations({
 
               {res.notes && <p className="text-sm text-gray-600">📝 {res.notes}</p>}
 
+              {getLinenInfo(res) && (
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={!!res.linenChecked}
+                    onChange={() => handleLinenToggle(res)}
+                    className="w-4 h-4"
+                  />
+                  <span className={res.linenChecked ? 'text-green-700 font-semibold' : 'text-gray-600'}>
+                    🧺 リネン準備OK
+                  </span>
+                  {getLinenInfo(res).lowStockItems.length > 0 && (
+                    <span className="text-xs font-bold text-red-600">
+                      ⚠️ 在庫不足: {getLinenInfo(res).lowStockItems.map((it) => it.name).join('・')}
+                    </span>
+                  )}
+                </label>
+              )}
+
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <span className={`px-3 py-1 rounded-full text-sm font-semibold ${statusClasses(res)}`}>
                   {statusLabel(res)}
@@ -602,6 +643,7 @@ export default function Reservations({
                 <th className="px-2 py-1.5 text-left text-xs font-semibold text-gray-700">人数</th>
                 <th className="px-2 py-1.5 text-left text-xs font-semibold text-gray-700">備考</th>
                 <th className="px-2 py-1.5 text-left text-xs font-semibold text-gray-700">状態</th>
+                <th className="px-2 py-1.5 text-left text-xs font-semibold text-gray-700">🧺 リネン</th>
                 <th className="px-2 py-1.5 text-left text-xs font-semibold text-gray-700">完了報告</th>
                 {isAdmin && (
                   <th className="px-2 py-1.5 text-left text-xs font-semibold text-gray-700">フィードバック</th>
@@ -678,6 +720,28 @@ export default function Reservations({
                         ? '確定'
                         : '待機中'}
                     </span>
+                  </td>
+                  <td className="px-2 py-1.5 whitespace-nowrap">
+                    {getLinenInfo(res) ? (
+                      <label className="flex items-center gap-1 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={!!res.linenChecked}
+                          onChange={() => handleLinenToggle(res)}
+                          className="w-4 h-4"
+                        />
+                        {getLinenInfo(res).lowStockItems.length > 0 && (
+                          <span
+                            className="text-xs font-bold text-red-600"
+                            title={`在庫不足: ${getLinenInfo(res).lowStockItems.map((it) => it.name).join('・')}`}
+                          >
+                            ⚠️
+                          </span>
+                        )}
+                      </label>
+                    ) : (
+                      <span className="text-gray-300 text-xs">-</span>
+                    )}
                   </td>
                   <td className="px-2 py-1.5 whitespace-nowrap">
                     {res.completed ? (
