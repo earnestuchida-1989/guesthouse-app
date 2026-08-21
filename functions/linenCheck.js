@@ -1,8 +1,14 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 
-// 品目の必要数＝基本数＋1人あたり×宿泊人数（人数未定の予約は基本数のみで計算）
+// 品目の必要数＝基本数＋1人あたり×宿泊人数＋（◯名超過分の追加ルール）
+// 例：タカのピロー（基本4、2名を超えたら1人あたり+1）なら、3名予約で5枚。
+// 人数未定の予約は基本数（＋通常の1人あたり分）のみで計算し、超過ルールは適用しない。
 function requiredQuantity(item, persons) {
-  return (item.minQuantity || 0) + (item.perPerson || 0) * (persons || 0);
+  let total = (item.minQuantity || 0) + (item.perPerson || 0) * (persons || 0);
+  if (typeof item.thresholdPersons === 'number' && typeof persons === 'number' && persons > item.thresholdPersons) {
+    total += (item.extraPerPerson || 0) * (persons - item.thresholdPersons);
+  }
+  return total;
 }
 
 /**

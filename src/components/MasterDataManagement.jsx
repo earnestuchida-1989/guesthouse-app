@@ -938,21 +938,24 @@ function CustomerModal({ customer, onClose }) {
 function useSupplyTracking(tracking) {
   const [enabled, setEnabled] = useState(tracking?.enabled || false);
   const [storesOnSite, setStoresOnSite] = useState(tracking?.storesOnSite || false);
+  const blankItem = { name: '', minQuantity: '', perPerson: '', thresholdPersons: '', extraPerPerson: '', currentStock: '' };
   const [items, setItems] = useState(
     Array.isArray(tracking?.items) && tracking.items.length > 0
       ? tracking.items.map((it) => ({
           name: it.name || '',
           minQuantity: typeof it.minQuantity === 'number' ? String(it.minQuantity) : '',
           perPerson: typeof it.perPerson === 'number' ? String(it.perPerson) : '',
+          thresholdPersons: typeof it.thresholdPersons === 'number' ? String(it.thresholdPersons) : '',
+          extraPerPerson: typeof it.extraPerPerson === 'number' ? String(it.extraPerPerson) : '',
           currentStock: typeof it.currentStock === 'number' ? String(it.currentStock) : '',
         }))
-      : [{ name: '', minQuantity: '', perPerson: '', currentStock: '' }]
+      : [blankItem]
   );
 
   const updateItem = (idx, field, value) => {
     setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, [field]: value } : it)));
   };
-  const addItem = () => setItems((prev) => [...prev, { name: '', minQuantity: '', perPerson: '', currentStock: '' }]);
+  const addItem = () => setItems((prev) => [...prev, blankItem]);
   const removeItem = (idx) => setItems((prev) => prev.filter((_, i) => i !== idx));
 
   const toData = () => ({
@@ -965,6 +968,8 @@ function useSupplyTracking(tracking) {
             name: it.name.trim(),
             minQuantity: it.minQuantity !== '' ? parseInt(it.minQuantity, 10) : 0,
             perPerson: it.perPerson !== '' ? parseInt(it.perPerson, 10) : 0,
+            thresholdPersons: it.thresholdPersons !== '' ? parseInt(it.thresholdPersons, 10) : null,
+            extraPerPerson: it.extraPerPerson !== '' ? parseInt(it.extraPerPerson, 10) : 0,
             currentStock: storesOnSite && it.currentStock !== '' ? parseInt(it.currentStock, 10) : null,
           }))
       : [],
@@ -996,55 +1001,70 @@ function SupplyEditorSection({ title, icon, unitLabel, tracking, note }) {
             />
             この物件で保管している（在庫数を管理する）
           </label>
-          <div className="flex items-center gap-2 text-xs text-gray-400 px-0.5">
-            <span className="flex-1">品目</span>
-            <span className="w-24">基本数</span>
-            <span className="w-24">1人あたり+</span>
-            {tracking.storesOnSite && <span className="w-24">現在庫</span>}
-            <span className="w-4" />
-          </div>
-          <div className="space-y-2">
+          <div className="space-y-3">
             {tracking.items.map((item, idx) => (
-              <div key={idx} className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={item.name}
-                  onChange={(e) => tracking.updateItem(idx, 'name', e.target.value)}
-                  placeholder="品目"
-                  className="flex-1 px-2 py-1.5 border border-gray-300 rounded text-sm"
-                />
-                <input
-                  type="number"
-                  value={item.minQuantity}
-                  onChange={(e) => tracking.updateItem(idx, 'minQuantity', e.target.value)}
-                  placeholder={`基本${unitLabel}数`}
-                  title={`基本${unitLabel}数（人数に関わらず最低限必要な数）`}
-                  className="w-24 px-2 py-1.5 border border-gray-300 rounded text-sm"
-                />
-                <input
-                  type="number"
-                  value={item.perPerson}
-                  onChange={(e) => tracking.updateItem(idx, 'perPerson', e.target.value)}
-                  placeholder="1人あたり+"
-                  title={`宿泊人数1人あたりに追加で必要な${unitLabel}数（例：タオルなら1人あたり2枚など）`}
-                  className="w-24 px-2 py-1.5 border border-gray-300 rounded text-sm"
-                />
-                {tracking.storesOnSite && (
+              <div key={idx} className="border border-gray-100 rounded-lg p-2 space-y-1.5 bg-gray-50">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={item.name}
+                    onChange={(e) => tracking.updateItem(idx, 'name', e.target.value)}
+                    placeholder="品目（例：バスタオル）"
+                    className="flex-1 px-2 py-1.5 border border-gray-300 rounded text-sm"
+                  />
                   <input
                     type="number"
-                    value={item.currentStock}
-                    onChange={(e) => tracking.updateItem(idx, 'currentStock', e.target.value)}
-                    placeholder="現在庫"
+                    value={item.minQuantity}
+                    onChange={(e) => tracking.updateItem(idx, 'minQuantity', e.target.value)}
+                    placeholder="基本数"
+                    title={`基本${unitLabel}数（人数に関わらず最低限必要な数）`}
+                    className="w-20 px-2 py-1.5 border border-gray-300 rounded text-sm"
+                  />
+                  <input
+                    type="number"
+                    value={item.perPerson}
+                    onChange={(e) => tracking.updateItem(idx, 'perPerson', e.target.value)}
+                    placeholder="1人あたり+"
+                    title={`宿泊人数1人あたりに必要な${unitLabel}数（例：タオル1人2枚など、1人目から適用）`}
                     className="w-24 px-2 py-1.5 border border-gray-300 rounded text-sm"
                   />
-                )}
-                <button
-                  type="button"
-                  onClick={() => tracking.removeItem(idx)}
-                  className="text-red-500 hover:text-red-700 text-sm px-1"
-                >
-                  ×
-                </button>
+                  {tracking.storesOnSite && (
+                    <input
+                      type="number"
+                      value={item.currentStock}
+                      onChange={(e) => tracking.updateItem(idx, 'currentStock', e.target.value)}
+                      placeholder="現在庫"
+                      className="w-20 px-2 py-1.5 border border-gray-300 rounded text-sm"
+                    />
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => tracking.removeItem(idx)}
+                    className="text-red-500 hover:text-red-700 text-sm px-1"
+                  >
+                    ×
+                  </button>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-gray-500 pl-1">
+                  <span className="whitespace-nowrap">追加ルール（任意）：</span>
+                  <input
+                    type="number"
+                    value={item.thresholdPersons}
+                    onChange={(e) => tracking.updateItem(idx, 'thresholdPersons', e.target.value)}
+                    placeholder="◯名"
+                    title="この人数を超えたら追加が発生する（例：2名を超えたら、など）"
+                    className="w-16 px-2 py-1 border border-gray-300 rounded"
+                  />
+                  <span className="whitespace-nowrap">名を超えたら、1人増えるごとに+</span>
+                  <input
+                    type="number"
+                    value={item.extraPerPerson}
+                    onChange={(e) => tracking.updateItem(idx, 'extraPerPerson', e.target.value)}
+                    placeholder="0"
+                    className="w-16 px-2 py-1 border border-gray-300 rounded"
+                  />
+                  <span className="whitespace-nowrap">{unitLabel}追加</span>
+                </div>
               </div>
             ))}
           </div>
@@ -1292,7 +1312,7 @@ function PropertyModal({ property, customers, vendors = [], existingProperties =
             icon="🧺"
             unitLabel="枚"
             tracking={linenTracking}
-            note='必要数は「基本数 ＋ 1人あたり×宿泊人数」で自動計算されます（例：基本0枚・1人あたり2枚のバスタオルは、4名予約なら8枚）。人数未定の予約は基本数のみで計算されます。ここで登録した品目は「清掃管理」画面の各予定に「🧺 リネン準備OK」チェックとして表示されます。在庫を保管している場合、チェックを入れるたびに必要数分が自動で差し引かれます。'
+            note='必要数は「基本数 ＋ 1人あたり×宿泊人数 ＋（◯名超過分の追加ルール）」で自動計算されます。例：タカのピロー（基本4、2名を超えたら1人あたり+1）なら、3名予約で5枚。人数未定の予約は基本数のみで計算されます。ここで登録した品目は「清掃管理」画面の各予定に「🧺 リネン準備OK」チェックとして表示されます。在庫を保管している場合、チェックを入れるたびに必要数分が自動で差し引かれます。'
           />
           <SupplyEditorSection
             title="消耗品管理"

@@ -1,10 +1,14 @@
 // 清掃管理画面で物件名をクリックしたときに開く、リネン・消耗品の必要準備数の確認用モーダル。
 // 編集はできない（編集は「マスタデータ管理」の物件マスタから行う）、閲覧専用。
 
-// 品目の必要数＝基本数＋1人あたり×宿泊人数（人数未定の場合はnull、基本数だけを見せる）
+// 品目の必要数＝基本数＋1人あたり×宿泊人数＋（◯名超過分の追加ルール）（人数未定の場合はnull）
 function requiredQuantity(item, persons) {
   if (typeof persons !== 'number') return null;
-  return (item.minQuantity || 0) + (item.perPerson || 0) * persons;
+  let total = (item.minQuantity || 0) + (item.perPerson || 0) * persons;
+  if (typeof item.thresholdPersons === 'number' && persons > item.thresholdPersons) {
+    total += (item.extraPerPerson || 0) * (persons - item.thresholdPersons);
+  }
+  return total;
 }
 
 function SupplySection({ title, icon, tracking, persons }) {
@@ -39,6 +43,9 @@ function SupplySection({ title, icon, tracking, persons }) {
                 <td className="px-3 py-1.5 text-gray-600">
                   {item.minQuantity ?? 0}
                   {item.perPerson ? ` ＋ 1人×${item.perPerson}` : ''}
+                  {typeof item.thresholdPersons === 'number' && item.extraPerPerson
+                    ? ` ／ ${item.thresholdPersons}名超過分+${item.extraPerPerson}`
+                    : ''}
                 </td>
                 {typeof persons === 'number' && (
                   <td className="px-3 py-1.5 font-semibold text-gray-800">{required}</td>
