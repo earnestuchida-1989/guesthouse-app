@@ -20,7 +20,8 @@ function SupplySection({ title, icon, tracking, persons }) {
       <h4 className="font-semibold text-gray-700 mb-2">
         {icon} {title}
       </h4>
-      <table className="w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
+      <div className="overflow-x-auto border border-gray-200 rounded-lg">
+      <table className="w-full min-w-[420px] text-sm">
         <thead className="bg-gray-50 text-gray-500 text-xs">
           <tr>
             <th className="px-3 py-1.5 text-left">品目</th>
@@ -63,6 +64,7 @@ function SupplySection({ title, icon, tracking, persons }) {
           })}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

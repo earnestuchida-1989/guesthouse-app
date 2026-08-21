@@ -1004,13 +1004,13 @@ function SupplyEditorSection({ title, icon, unitLabel, tracking, note }) {
           <div className="space-y-3">
             {tracking.items.map((item, idx) => (
               <div key={idx} className="border border-gray-100 rounded-lg p-2 space-y-1.5 bg-gray-50">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-1.5">
                   <input
                     type="text"
                     value={item.name}
                     onChange={(e) => tracking.updateItem(idx, 'name', e.target.value)}
                     placeholder="品目（例：バスタオル）"
-                    className="flex-1 px-2 py-1.5 border border-gray-300 rounded text-sm"
+                    className="flex-1 min-w-[7rem] px-2 py-1.5 border border-gray-300 rounded text-sm"
                   />
                   <input
                     type="number"
@@ -1018,15 +1018,15 @@ function SupplyEditorSection({ title, icon, unitLabel, tracking, note }) {
                     onChange={(e) => tracking.updateItem(idx, 'minQuantity', e.target.value)}
                     placeholder="基本数"
                     title={`基本${unitLabel}数（人数に関わらず最低限必要な数）`}
-                    className="w-20 px-2 py-1.5 border border-gray-300 rounded text-sm"
+                    className="w-16 px-2 py-1.5 border border-gray-300 rounded text-sm"
                   />
                   <input
                     type="number"
                     value={item.perPerson}
                     onChange={(e) => tracking.updateItem(idx, 'perPerson', e.target.value)}
-                    placeholder="1人あたり+"
+                    placeholder="1人+"
                     title={`宿泊人数1人あたりに必要な${unitLabel}数（例：タオル1人2枚など、1人目から適用）`}
-                    className="w-24 px-2 py-1.5 border border-gray-300 rounded text-sm"
+                    className="w-16 px-2 py-1.5 border border-gray-300 rounded text-sm"
                   />
                   {tracking.storesOnSite && (
                     <input
@@ -1034,7 +1034,7 @@ function SupplyEditorSection({ title, icon, unitLabel, tracking, note }) {
                       value={item.currentStock}
                       onChange={(e) => tracking.updateItem(idx, 'currentStock', e.target.value)}
                       placeholder="現在庫"
-                      className="w-20 px-2 py-1.5 border border-gray-300 rounded text-sm"
+                      className="w-16 px-2 py-1.5 border border-gray-300 rounded text-sm"
                     />
                   )}
                   <button
@@ -1045,25 +1045,25 @@ function SupplyEditorSection({ title, icon, unitLabel, tracking, note }) {
                     ×
                   </button>
                 </div>
-                <div className="flex items-center gap-2 text-xs text-gray-500 pl-1">
-                  <span className="whitespace-nowrap">追加ルール（任意）：</span>
+                <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-gray-500 pl-1">
+                  <span className="w-full sm:w-auto">追加ルール（任意）：</span>
                   <input
                     type="number"
                     value={item.thresholdPersons}
                     onChange={(e) => tracking.updateItem(idx, 'thresholdPersons', e.target.value)}
                     placeholder="◯名"
                     title="この人数を超えたら追加が発生する（例：2名を超えたら、など）"
-                    className="w-16 px-2 py-1 border border-gray-300 rounded"
+                    className="w-14 px-1.5 py-1 border border-gray-300 rounded"
                   />
-                  <span className="whitespace-nowrap">名を超えたら、1人増えるごとに+</span>
+                  <span>名超で+1人あたり</span>
                   <input
                     type="number"
                     value={item.extraPerPerson}
                     onChange={(e) => tracking.updateItem(idx, 'extraPerPerson', e.target.value)}
                     placeholder="0"
-                    className="w-16 px-2 py-1 border border-gray-300 rounded"
+                    className="w-14 px-1.5 py-1 border border-gray-300 rounded"
                   />
-                  <span className="whitespace-nowrap">{unitLabel}追加</span>
+                  <span>{unitLabel}</span>
                 </div>
               </div>
             ))}
